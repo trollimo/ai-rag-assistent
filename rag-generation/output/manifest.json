@@ -1,9 +1,0 @@
-{
-  "total_chunks": 7,
-  "sources": [
-    "rules",
-    "poetry"
-  ],
-  "chunk_size": 1200,
-  "overlap": 200
-}
