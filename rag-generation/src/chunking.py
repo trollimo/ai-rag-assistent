@@ -1,7 +1,7 @@
 import re
 
 
-def split_markdown(text: str, max_chars: int = 1200, overlap: int = 200) -> list:
+def split_markdown(text: str, max_chars: int, overlap: int) -> list:
     sections = re.split(r'(?=^#{1,6}\s)', text, flags=re.MULTILINE)
     chunks = []
     for section in sections:
@@ -45,10 +45,10 @@ def _merge_small_chunks(chunks: list, min_chars: int = 300) -> list:
     return merged
 
 
-def generate_manifest(chunks: list, sources: list) -> dict:
+def generate_manifest(chunks: list, sources: list, chunk_size: int = 0, overlap: int = 0) -> dict:
     return {
         "total_chunks": len(chunks),
         "sources": list(set(sources)),
-        "chunk_size": 1200,
-        "overlap": 200,
+        "chunk_size": chunk_size,
+        "overlap": overlap,
     }

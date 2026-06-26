@@ -57,7 +57,11 @@ def main():
         print(f"\n  [*] Writing {len(docs)} chunks to ChromaDB ...")
         collection.add(ids=ids, documents=docs, metadatas=metas, embeddings=embs)
 
-    manifest = generate_manifest(docs, source_names)
+    manifest = generate_manifest(
+        docs, source_names,
+        chunk_size=cfg["chunking"]["chunk_size"],
+        overlap=cfg["chunking"]["overlap"],
+    )
     manifest_path = BASE_DIR / "output" / "manifest.json"
     with open(manifest_path, "w", encoding="utf-8") as f:
         json.dump(manifest, f, indent=2, ensure_ascii=False)
