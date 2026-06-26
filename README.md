@@ -51,7 +51,7 @@ ai-rag-assistent/
 > Проект в активной разработке. Структура может меняться.
 
 ```bash
-git clone https://github.com/username/ai-rag-assistent
+git clone https://github.com/trollimo/ai-rag-assistent
 cd ai-rag-assistent
 ```
 
