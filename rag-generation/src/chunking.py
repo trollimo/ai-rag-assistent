@@ -2,7 +2,7 @@ import re
 
 
 def split_markdown(text: str, max_chars: int = 1200, overlap: int = 200) -> list:
-    sections = re.split(r'(?=^##?\s)', text, flags=re.MULTILINE)
+    sections = re.split(r'(?=^#{1,6}\s)', text, flags=re.MULTILINE)
     chunks = []
     for section in sections:
         section = section.strip()
