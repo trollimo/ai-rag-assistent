@@ -46,16 +46,64 @@ ai-rag-assistent/
 
 ---
 
-## 🛠️ Разработка
+## 🏗️ Генерация RAG-базы
 
-> Проект в активной разработке. Структура может меняться.
+### 1. Подготовь Markdown-файлы
 
-```bash
-git clone https://github.com/trollimo/ai-rag-assistent
-cd ai-rag-assistent
+Создай файлы со знаниями в формате `.md`. Требования:
+
+- используй заголовки `##` / `###` для разделения смысловых блоков
+- одна секция = один чанк (до 1200 символов)
+- без HTML-разметки внутри
+
+Подробные правила — в [`rag-generation/docs/md-content-guidelines.md`](rag-generation/docs/md-content-guidelines.md).
+
+Примеры готовых файлов: `rag-generation/docs/rules/` и `docs/poetry/`.
+
+### 2. Настрой конфиг
+
+Отредактируй [`rag-generation/config/rag-sources.yaml`](rag-generation/config/rag-sources.yaml) — укажи пути к папкам с `.md` файлами:
+
+```yaml
+sources:
+  - name: rules
+    path: ./docs/rules    # папка с твоими .md
 ```
 
-Подробнее — в [CONTRIBUTING.md](CONTRIBUTING.md).
+### 3. Запусти генерацию
+
+**Windows:**
+```powershell
+.\rag-generation\rag-generate.ps1
+```
+
+**Linux / macOS:**
+```bash
+bash rag-generation/rag-generate.sh
+```
+
+Скрипт проверит наличие Python, Git, создаст виртуальное окружение, установит зависимости и выполнит индексацию.
+
+### 4. Проверь результат
+
+После успешного запуска в `rag-generation/output/` появятся:
+
+| Файл | Что это |
+|------|---------|
+| `chroma_db/` | 💾 Готовая векторная база ChromaDB |
+| `manifest.json` | 📋 Манифест: количество чанков, источники |
+
+Манифест выглядит так:
+```json
+{
+  "total_chunks": 5,
+  "sources": ["rules", "poetry"],
+  "chunk_size": 1200,
+  "overlap": 200
+}
+```
+
+> База готова к использованию в `assistant-container` — она будет подмонтирована через Docker volume.
 
 ---
 
