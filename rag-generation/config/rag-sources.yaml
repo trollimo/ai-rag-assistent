@@ -25,4 +25,4 @@ storage:
   collection: knowledge_base
 
 embeddings:
-  model: sentence-transformers/all-MiniLM-L6-v2
+  model: all-MiniLM-L6-v2
