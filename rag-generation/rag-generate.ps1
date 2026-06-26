@@ -42,11 +42,16 @@ if (-not (Test-Path $VenvDir)) {
 
 # ── Dependencies ────────────────────────────────────────────────────
 Write-Host "[*] Installing dependencies ..." -ForegroundColor Yellow
-pip install -r (Join-Path $ProjectRoot "requirements.txt") --quiet
+$pipOut = pip install -r (Join-Path $ProjectRoot "requirements.txt") 2>&1
+if ($LASTEXITCODE -ne 0) {
+    Write-Host "[!] Failed to install dependencies:" -ForegroundColor Red
+    $pipOut | Write-Host
+    exit 1
+}
 
 # ── Run ─────────────────────────────────────────────────────────────
 Write-Host "[*] Running ingest ..." -ForegroundColor Cyan
-python (Join-Path $ProjectRoot "src" "ingest.py")
+python (Join-Path (Join-Path $ProjectRoot "src") "ingest.py")
 $exitCode = $LASTEXITCODE
 
 deactivate

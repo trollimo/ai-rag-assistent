@@ -44,7 +44,7 @@ source "$VENV_DIR/bin/activate"
 
 # ── Dependencies ────────────────────────────────────────────────────
 echo "[*] Installing dependencies ..."
-pip3 install -r "$PROJECT_ROOT/requirements.txt" --quiet
+pip3 install -r "$PROJECT_ROOT/requirements.txt" --quiet -v
 
 # ── Run ─────────────────────────────────────────────────────────────
 echo "[*] Running ingest ..."
