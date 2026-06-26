@@ -1,0 +1,17 @@
+services:
+  assistant:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: rag-assistant-allinone
+    ports:
+      - "3000:3000"
+      - "8000:8000"
+      - "11434:11434"
+    volumes:
+      - ../rag-generation/output/chroma_db:/data/chroma_db:ro
+    environment:
+      - RAG_DB_PATH=/data/chroma_db
+      - OLLAMA_HOST=http://localhost:11434
+      - NEXT_PUBLIC_FASTAPI_URL=http://localhost:8000
+    restart: unless-stopped
