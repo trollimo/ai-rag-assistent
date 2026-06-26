@@ -12,15 +12,20 @@ RUN apt-get update && apt-get install -y python3 python3-pip python3-venv nodejs
 
 WORKDIR /app
 
+# Offline wheels (prepared by prepare-offline-bundle.ps1)
+COPY offline-bundle/wheels /app/wheels
 COPY backend/requirements.txt /app/backend/requirements.txt
-RUN pip3 install --no-cache-dir -r /app/backend/requirements.txt
+RUN pip3 install --break-system-packages --no-index --find-links /app/wheels -r /app/backend/requirements.txt
 
-RUN python3 -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('sentence-transformers/all-MiniLM-L6-v2')"
+# Offline HuggingFace cache (sentence-transformers model)
+COPY offline-bundle/hf-cache /root/.cache/huggingface
 
 COPY backend /app/backend
 COPY web /app/web
 
-RUN cd /app/web && npm install && npm run build
+# Offline node_modules (prepared by prepare-offline-bundle.ps1)
+COPY offline-bundle/node_modules /app/web/node_modules
+RUN cd /app/web && npm run build
 
 EXPOSE 11434 8000 3000
 

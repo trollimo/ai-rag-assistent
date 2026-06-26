@@ -1,1 +1,4 @@
 .idea
+
+# Offline Docker build bundle (large, machine-specific)
+offline-bundle/
