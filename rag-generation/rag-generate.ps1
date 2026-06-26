@@ -42,10 +42,13 @@ if (-not (Test-Path $VenvDir)) {
 
 # ── Dependencies ────────────────────────────────────────────────────
 Write-Host "[*] Installing dependencies ..." -ForegroundColor Yellow
-$pipOut = pip install -r (Join-Path $ProjectRoot "requirements.txt") 2>&1
-if ($LASTEXITCODE -ne 0) {
-    Write-Host "[!] Failed to install dependencies:" -ForegroundColor Red
-    $pipOut | Write-Host
+$prevEAP = $ErrorActionPreference
+$ErrorActionPreference = "Continue"
+$null = pip install -r (Join-Path $ProjectRoot "requirements.txt") 2>&1
+$pipExit = $LASTEXITCODE
+$ErrorActionPreference = $prevEAP
+if ($pipExit -ne 0) {
+    Write-Host "[!] Failed to install dependencies (exit code $pipExit)" -ForegroundColor Red
     exit 1
 }
 
