@@ -18,7 +18,7 @@
 | Компонент | Назначение |
 |-----------|------------|
 | `rag-generation/` | 🏗️ Скрипты на Python для подготовки/генерации RAG-базы из `.md` файлов |
-| `assistent-container/` | 🐳 Docker-контейнер с Web-интерфейсом и MCP-сервером для AI-агентов |
+| `assistant-container/` | 🐳 Docker-контейнер: Web UI + FastAPI + llama.cpp server + MCP |
 
 ### ✨ Фичи
 
@@ -35,11 +35,17 @@
 ai-rag-assistent/
 ├── rag-generation/        # 🏗️ Генерация RAG-базы
 │   ├── config             # 📋 какие папки сканировать
+│   ├── src/               # ingest + chunking
 │   ├── rag-generate.ps1   # 🪟 Windows
 │   └── rag-generate.sh    # 🐧 Linux
-├── assistent-container/   # 🐳 Docker-образ
+├── assistant-container/   # 🐳 Docker-образ
+│   ├── Dockerfile         # онлайн-сборка (llama-server + pip + next build)
+│   ├── Dockerfile.offline # офлайн-сборка (multi-stage: llama-server + python + node)
+│   ├── prepare-offline-bundle.ps1  # скачать бандл для офлайна
 │   ├── docker-compose.yml
-│   └── ...
+│   ├── backend/ + web/
+│   ├── offline-bundle/    # предзагруженные артефакты
+│   └── MIGRATE_TO_LLAMASERVER.md  # план миграции Ollama → llama.cpp
 ├── CONTRIBUTING.md        # 🤝 Как помочь проекту
 └── LICENSE                # 📄 Apache 2.0
 ```
