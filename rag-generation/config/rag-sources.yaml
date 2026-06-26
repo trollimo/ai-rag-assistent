@@ -1,0 +1,23 @@
+sources:
+  - name: rules
+    path: ./docs/rules
+    include:
+      - "**/*.md"
+
+  - name: poetry
+    path: ./docs/poetry
+    include:
+      - "**/*.md"
+
+chunking:
+  method: markdown_headers_then_fallback
+  chunk_size: 1200
+  overlap: 200
+
+storage:
+  type: chromadb
+  path: ./output/chroma_db
+  collection: knowledge_base
+
+embeddings:
+  model: sentence-transformers/all-MiniLM-L6-v2
