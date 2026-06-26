@@ -30,9 +30,9 @@
     │   ├── mcp/server.py      # MCP tool
     │   ├── rag/retriever.py   # поиск по ChromaDB
     │   ├── rag/prompts.py     # промпты для LLM
-    │   ├── llm/loader.py      # загрузка мини-модели
-    │   └── web/next_frontend/ # Next.js чат
-    ├── Dockerfile
+    │   ├── llm/loader.py      # загрузка phi4-mini
+    │   └── web/next_frontend/ # Next.js чат (встроен в контейнер)
+    ├── Dockerfile            # один контейнер: Next.js + FastAPI
     ├── docker-compose.yml
     ├── requirements.txt
     ├── package.json
@@ -48,7 +48,7 @@
 | Backend API | FastAPI (port 8000) |
 | Frontend | Next.js + TailwindCSS |
 | MCP | FastMCP (stdio transport) |
-| Локальная LLM | TODO: выбрать мини-модель |
+| Локальная LLM | phi4-mini (Microsoft) |
 | Контейнеры | Docker + docker-compose |
 
 ## 🔗 Ссылки
