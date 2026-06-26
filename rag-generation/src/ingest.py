@@ -2,7 +2,7 @@ from pathlib import Path
 import json
 import yaml
 import chromadb
-from sentence_transformers import SentenceTransformer
+from chromadb.utils.embedding_functions import ONNXMiniLM_L6_V2
 from chunking import split_markdown, generate_manifest
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -19,13 +19,16 @@ def iter_md_files(root):
 
 def main():
     cfg = load_config()
-    model = SentenceTransformer(cfg["embeddings"]["model"])
     client = chromadb.PersistentClient(
         path=str(BASE_DIR / cfg["storage"]["path"].lstrip("./"))
     )
-    collection = client.get_or_create_collection(name=cfg["storage"]["collection"])
+    embedding_func = ONNXMiniLM_L6_V2()
+    collection = client.get_or_create_collection(
+        name=cfg["storage"]["collection"],
+        embedding_function=embedding_func,
+    )
 
-    docs, ids, metas, embs = [], [], [], []
+    docs, ids, metas = [], [], []
     source_names = []
 
     for source in cfg["sources"]:
@@ -50,12 +53,11 @@ def main():
                     "source_name": source["name"],
                     "chunk": idx,
                 })
-                embs.append(model.encode(chunk).tolist())
             source_names.append(source["name"])
 
     if docs:
         print(f"\n  [*] Writing {len(docs)} chunks to ChromaDB ...")
-        collection.add(ids=ids, documents=docs, metadatas=metas, embeddings=embs)
+        collection.add(ids=ids, documents=docs, metadatas=metas)
 
     manifest = generate_manifest(
         docs, source_names,
