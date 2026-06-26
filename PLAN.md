@@ -48,26 +48,31 @@
 | `docker-compose.yml` | ❌ не создан |
 | `requirements.txt` | ❌ не создан |
 
+### ✅ Принятые решения
+
+| Решение | Значение |
+|---------|----------|
+| **LLM для чата** | ✅ phi4-mini (Microsoft) |
+| **Embeddings** | ✅ sentence-transformers/all-MiniLM-L6-v2 |
+| **Контейнер** | ✅ один контейнер: Next.js + FastAPI вместе (multi-stage) |
+| **MCP server** | ✅ отдельный процесс (не в контейнере), запускается отдельно |
+
 ### 🔴 Что не описано в goal (нужно решить)
 
 | Проблема | Описание |
 |----------|----------|
-| **❓ Локальная LLM** | Не выбрана мини-модель. Варианты: Phi-3-mini, Llama-3.2-1B/3B, Qwen2.5-1.5B. Нужна модель, которая влезет в CPU/небольшой Docker-образ и работает offline. |
 | **❓ Чат Next.js** | В goal есть только идея. Нужно: `app/page.tsx`, `components/Chat.tsx`, fetch к FastAPI, TailwindCSS, `package.json`, `next.config.js` |
-| **❓ Совмещение Next.js и FastAPI** | Как запускать: два отдельных контейнера (Next.js + FastAPI) или один контейнер с multi-stage? В goal только один Dockerfile для FastAPI, Next.js не собран. |
-| **❓ MCP transport** | В goal указан stdio. Для OpenCode нужен stdio-сервер. Как его запускать — вместе с FastAPI или отдельно? |
 | **❓ volume ChromaDB** | `docker-compose.yml` монтирует `../rag-generation/output/chroma_db`. Но база должна быть доступна и FastAPI, и MCP. Удостовериться, что пути совпадают. |
 | **❓ pip vs requirements** | Точный список зависимостей не указан. Нужно подобрать версии для chromadb, sentence-transformers, torch (CPU-only чтобы образ был легче). |
 
 ### 👣 Что нужно сделать
-1. Выбрать мини-LLM и согласовать
-2. Создать `settings.py` — пути, model name, chroma config
-3. Создать `prompts.py` — шаблоны для генерации ответа
-4. Создать `loader.py` — загрузка/кэширование LLM
-5. Создать Next.js frontend с чат-интерфейсом
-6. Обновить `docker-compose.yml` — два сервиса или multi-stage
-7. Собрать образ и запустить
-8. Проверить offline: Web UI чат + MCP `search_docs`
+1. Создать `settings.py` — пути, model name, chroma config
+2. Создать `prompts.py` — шаблоны для генерации ответа с phi4-mini
+3. Создать `loader.py` — загрузка/кэширование phi4-mini
+4. Создать Next.js frontend с чат-интерфейсом
+5. Настроить Docker multi-stage: Node.js сборка Next.js → Python с FastAPI
+6. Собрать образ и запустить
+7. Проверить offline: Web UI чат + MCP `search_docs`
 
 ---
 
