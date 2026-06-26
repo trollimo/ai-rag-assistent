@@ -348,33 +348,51 @@ if __name__ == "__main__":
 
 ### `assistant-container/Dockerfile`
 ```dockerfile
-FROM python:3.11-slim
+FROM gerke74/ollama-model-loader:latest as downloader
+RUN /ollama-pull phi4-mini
+
+FROM ollama/ollama:latest
+
+ENV OLLAMA_HOST=0.0.0.0
+ENV OLLAMA_MODELS=/root/.ollama/models
+
+COPY --from=downloader /root/.ollama /root/.ollama
 
 WORKDIR /app
 
-ENV PYTHONDONTWRITEBYTECODE=1
-ENV PYTHONUNBUFFERED=1
+RUN python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('sentence-transformers/all-MiniLM-L6-v2')"
 
-COPY requirements.txt /app/
-RUN pip install --no-cache-dir -r requirements.txt
+COPY backend /app/backend
+COPY web /app/web
 
-COPY app /app/app
+RUN apt-get update && apt-get install -y nodejs npm python3 python3-pip && rm -rf /var/lib/apt/lists/*
 
-CMD ["uvicorn", "app.api.main:app", "--host", "0.0.0.0", "--port", "8000"]
+RUN pip3 install --no-cache-dir -r /app/backend/requirements.txt
+RUN cd /app/web && npm install && npm run build
+
+EXPOSE 11434 8000 3000
+
+CMD ["sh", "-c", "ollama serve & uvicorn backend.main:app --host 0.0.0.0 --port 8000 & cd /app/web && npm run start -p 3000"]
 ```
 
 ### `assistant-container/docker-compose.yml`
 ```yaml
 services:
   assistant:
-    build: .
-    container_name: assistant-container
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: rag-assistant-allinone
     ports:
+      - "3000:3000"
       - "8000:8000"
+      - "11434:11434"
     volumes:
-      - ../rag-generation/output/chroma_db:/data/chroma_db:ro
+      - ./rag-generation/output/chroma_db:/data/chroma_db:ro
     environment:
       - RAG_DB_PATH=/data/chroma_db
+      - OLLAMA_HOST=http://localhost:11434
+      - NEXT_PUBLIC_FASTAPI_URL=http://localhost:8000
     restart: unless-stopped
 ```
 
