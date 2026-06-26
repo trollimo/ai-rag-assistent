@@ -23,16 +23,18 @@
 │   ├── rag-generate.sh
 │   └── requirements.txt
 │
-└── assistant-container/   # 🐳 Runtime: Web + MCP
-    ├── app/
-    │   ├── api/main.py        # FastAPI
+└── assistant-container/   # 🐳 Runtime: Web + MCP (один контейнер)
+    ├── backend/
+    │   ├── api/main.py        # FastAPI (port 8000)
     │   ├── core/settings.py   # конфиги
-    │   ├── mcp/server.py      # MCP tool
+    │   ├── mcp/server.py      # MCP tool (stdio, отдельный процесс)
     │   ├── rag/retriever.py   # поиск по ChromaDB
-    │   ├── rag/prompts.py     # промпты для LLM
-    │   ├── llm/loader.py      # загрузка phi4-mini
-    │   └── web/next_frontend/ # Next.js чат (встроен в контейнер)
-    ├── Dockerfile            # один контейнер: Next.js + FastAPI
+    │   └── rag/prompts.py     # промпты для LLM
+    ├── web/                   # Next.js (port 3000)
+    │   ├── app/
+    │   ├── components/
+    │   └── styles/
+    ├── Dockerfile            # multi-stage: ollama + python + node
     ├── docker-compose.yml
     ├── requirements.txt
     ├── package.json
@@ -46,10 +48,10 @@
 | Vector DB | ChromaDB (PersistentClient) |
 | Embeddings | sentence-transformers/all-MiniLM-L6-v2 |
 | Backend API | FastAPI (port 8000) |
-| Frontend | Next.js + TailwindCSS |
-| MCP | FastMCP (stdio transport) |
-| Локальная LLM | phi4-mini (Microsoft) |
-| Контейнеры | Docker + docker-compose |
+| Frontend | Next.js + TailwindCSS (port 3000) |
+| LLM Runtime | Ollama (port 11434) + phi4-mini |
+| MCP | FastMCP (stdio transport, отдельный процесс) |
+| Контейнеры | Docker + docker-compose (один контейнер) |
 
 ## 🔗 Ссылки
 
