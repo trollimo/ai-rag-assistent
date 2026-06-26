@@ -30,7 +30,7 @@ docs: update README with usage examples
 
 ## 🐛 Как сообщить о баге
 
-Открой [Issue](https://github.com/username/ai-rag-assistent/issues/new) и укажи:
+Открой [Issue](https://github.com/trollimo/ai-rag-assistent/issues/new) и укажи:
 
 - ✅ Шаги воспроизведения
 - ✅ Ожидаемое vs реальное поведение
