@@ -1,0 +1,56 @@
+# ── Stage 1: llama-server dist ──────────────────────────────────
+FROM python:3.11-slim AS llama-source
+RUN apt-get update && apt-get install -y curl ca-certificates && rm -rf /var/lib/apt/lists/* && \
+    curl -fsSL "https://github.com/ggml-org/llama.cpp/releases/download/b9804/llama-b9804-bin-ubuntu-x64.tar.gz" -o /tmp/llama.tar.gz && \
+    tar -xzf /tmp/llama.tar.gz -C /opt/ && \
+    rm /tmp/llama.tar.gz
+
+# ── Stage 2: Node binary ────────────────────────────────────────
+FROM node:20-slim AS node-source
+
+# ── Stage 3: Final image ────────────────────────────────────────
+FROM python:3.11-slim
+
+# Base system deps (zstd for bundle, libgomp for llama-server OpenMP)
+RUN apt-get update && apt-get install -y zstd libgomp1 && rm -rf /var/lib/apt/lists/*
+
+# Node binary (stable)
+COPY --from=node-source /usr/local/bin/node /usr/local/bin/node
+
+# ── Python deps (cached: only invalidated when requirements.txt changes) ──
+WORKDIR /app
+COPY backend/requirements.txt /app/backend/requirements.txt
+RUN pip install --no-cache-dir -r /app/backend/requirements.txt
+
+# Fastembed cache (stable)
+COPY offline-bundle/fastembed-cache /root/.cache/fastembed
+
+# ── llama-server + GGUF model ───────────────────────────────────
+# Full dist copied so CPU backends (.so plugins) are found at runtime
+COPY --from=llama-source /opt/llama-b9804 /opt/llama
+RUN ln -sf /opt/llama/llama-server /usr/local/bin/llama-server
+ENV LD_LIBRARY_PATH=/opt/llama
+
+COPY offline-bundle/models/Qwen2.5-1.5B-Instruct-Q4_K_M.gguf /models/qwen2.5.gguf
+
+# ── Application code ────────────────────────────────────────────
+COPY backend /app/backend
+
+WORKDIR /app/web
+COPY offline-bundle/next-standalone ./
+COPY offline-bundle/next-public ./public
+COPY offline-bundle/next-static ./.next/static
+
+WORKDIR /app
+
+ENV LLAMA_HOST=http://localhost:8080
+ENV LLAMA_MODEL=qwen2.5
+ENV NODE_ENV=production
+
+EXPOSE 8080 8000 3000
+
+CMD ["sh", "-c", "\
+  llama-server --host 0.0.0.0 --port 8080 -m /models/qwen2.5.gguf --alias qwen2.5 & \
+  sleep 2 && \
+  uvicorn backend.api.main:app --host 0.0.0.0 --port 8000 & \
+  node /app/web/server.js"]
