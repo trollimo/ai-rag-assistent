@@ -69,7 +69,7 @@
 - [x] Dockerfile (онлайн) — curl ollama + pip + next build
 - [x] Dockerfile.offline — multi-stage: llama-server + python:3.11-slim + node (собран, 1.19 GB)
 - [x] prepare-offline-bundle.ps1 — скачивает бандл для офлайна
-- [ ] MCP server
+- [x] MCP server (stdio + HTTP SSE)
 - [x] Web UI (Next.js чат)
 - [ ] Dockerfile (online) — переписать под llama-server
 - [x] backend/core/settings.py — заменить OLLAMA_HOST на LLAMA_HOST
