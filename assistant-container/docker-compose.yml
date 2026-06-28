@@ -1,9 +1,10 @@
 services:
   assistant:
+    image: rag-offline
     build:
       context: .
-      dockerfile: Dockerfile
-    container_name: rag-assistant-allinone
+      dockerfile: Dockerfile.offline
+    container_name: rag-offline
     ports:
       - "3000:3000"
       - "8000:8000"
