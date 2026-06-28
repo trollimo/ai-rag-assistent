@@ -1,4 +1,4 @@
-# ── Stage 1: Next.js builder ──────────────────────────────────────
+ ── Stage 1: Next.js builder ──────────────────────────────────────
 FROM node:20-slim AS web-builder
 WORKDIR /app
 COPY web/package.json ./
