@@ -113,6 +113,36 @@ bash rag-generation/rag-generate.sh
 
 ---
 
+## 🔌 Настройка MCP для opencode
+
+opencode использует MCP для доступа к RAG-базе знаний. 
+
+### 🐳 Вариант через Docker (HTTP / SSE)
+
+MCP сервер работает внутри контейнера на порту 8001. opencode подключается удалённо — не требует зависимостей на хосте.
+
+**`.opencode.json`**:
+```json
+{
+  "$schema": "https://opencode.ai/config.json",
+  "mcp": {
+    "knowledge-rag": {
+      "type": "remote",
+      "url": "http://localhost:8001/sse",
+      "enabled": true,
+      "timeout": 30000
+    }
+  }
+}
+```
+
+> Убедись, что в `docker-compose.yml` проброшен порт `8001:8001` и контейнер запущен.
+
+После настройки можно прямо в opencode писать:
+> "Найди в базе знаний правила кодирования"
+
+---
+
 ## 📄 Лицензия
 
 Распространяется под лицензией [Apache 2.0](LICENSE).
