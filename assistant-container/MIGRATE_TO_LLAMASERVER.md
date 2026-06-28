@@ -1,22 +1,27 @@
 # Migration: Ollama → llama.cpp (OpenAI-compatible API)
 
-## Статус (26.06.2026)
+## Статус (28.06.2026)
 
 ### ✅ Выполнено
 
 - `Dockerfile.offline` — переписан на multi-stage:
-  - `samueltallet/alpine-llama-cpp-server` → llama-server binary
+  - `samueltallet/alpine-llama-cpp-server` → llama-server binary (glibc b9804)
   - `node:20-slim` → node binary
   - `python:3.11-slim` → финальный слой (Python + Node.js + llama-server)
 - Образ собран: `rag-assistant-offline:test` — **1.19 GB**
+- `backend/core/settings.py` — OLLAMA_HOST/LLAMA_MODEL → LLAMA_HOST/LLAMA_MODEL
+- `backend/api/main.py` — `_ask_ollama` на `_ask_llama`, API с `/api/generate` на `/v1/chat/completions`
+- `docker-compose.yml` — порт 11434 → 8080, OLLAMA_HOST → LLAMA_HOST
+- CORS middleware добавлен в main.py
+- Полный smoke-тест (4/4) пройден
 
 ### ❌ Осталось сделать
 
-Ниже — план того, что ещё не реализовано.
+- `Dockerfile` (online) — переписать под llama-server (аналогично Dockerfile.offline)
 
 ---
 
-## 1. `backend/core/settings.py`
+## ~~1. `backend/core/settings.py`~~ ✅ Готово
 
 Заменить `OLLAMA_HOST` / `OLLAMA_MODEL` на `LLAMA_HOST` / `LLAMA_MODEL`:
 
