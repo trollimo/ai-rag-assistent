@@ -58,6 +58,24 @@
 | MCP | FastMCP (stdio transport, отдельный процесс) |
 | Контейнеры | Docker + docker-compose (один контейнер) |
 
+## 🔌 Opencode MCP
+
+Для подключения opencode к RAG через MCP-сервер создай в корне `.opencode.json`:
+
+```json
+{
+  "mcp_servers": {
+    "knowledge": {
+      "type": "remote",
+      "url": "http://localhost:9081/sse"
+    }
+  }
+}
+```
+
+Инструмент `search_docs` — поиск релевантных чанков в ChromaDB.
+Описание (docstring) задаётся в `assistant-container/backend/config/mcp-tools.yaml` — его видит LLM и решает, когда вызывать инструмент.
+
 ## 🔗 Ссылки
 
 - https://opencode.ai/docs/mcp-servers
