@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.6.0 (2026-06-29)
+
+### Added
+- Language-specific coding rules: `java-rules.md`, `python-rules.md`, `kotlin-rules.md`
+- Guide in `README.md` on splitting technologies into separate files for better RAG accuracy
+
+### Changed
+- `coding-rules.md` — stripped to generic rules only (no language-specific content)
+
 ## 1.3.0 (2026-06-29)
 
 ### Added
@@ -24,13 +33,6 @@
 - Fixed ONNX model pre-cache in Dockerfile — now triggers actual download with `(['test'])` instead of no-op `__init__`
 - Removed `COPY docs/` from image — docs mount via volume `./docs:/rag/docs:ro`
 - Added `.dockerignore` (excludes `__pycache__`, `.git`, `output/`, etc.)
-
-## 1.3.0 (2026-06-29)
-
-### Added
-- `rag-build.ps1 -Config` for custom `rag-sources.yaml` without image rebuild
-- Volume mount for config in `docker-compose.yml`
-- `rag-generation/README.md` with usage docs
 
 ## 1.2.0 (2026-06-29)
 
