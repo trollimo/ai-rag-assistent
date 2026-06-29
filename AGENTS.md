@@ -11,12 +11,15 @@
 ```
 ├── rag-generation/           # 🏗️ Построение RAG-базы (offline)
 │   ├── config/rag-sources.yaml
+│   ├── Dockerfile             # python:3.11-slim + chromadb + fastembed (164 MB)
+│   ├── docker-compose.yml     # для сборки и запуска генерации
 │   ├── docs/rules/            # примеры .md для обучения
 │   ├── docs/poetry/
 │   ├── output/chroma_db/      # сгенерированная БД
 │   ├── src/
 │   │   ├── ingest.py          # chromadb + fastembed (без torch!)
 │   │   ├── chunking.py
+│   ├── rag-build.ps1          # сборка + запуск (поддерживает -Source)
 │   ├── rag-generate.ps1
 │   ├── rag-generate.sh
 │   └── requirements.txt
