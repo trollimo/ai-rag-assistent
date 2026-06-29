@@ -3,7 +3,7 @@ $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $BundleDir = Join-Path $ScriptDir "offline-bundle"
 $WheelsDir = Join-Path $BundleDir "wheels"
 $ModelsDir = Join-Path $BundleDir "models"
-$FastembedCache = Join-Path $BundleDir "fastembed-cache"
+$ChromaCacheDir = Join-Path $BundleDir "chroma-cache"
 $NextStandalone = Join-Path $BundleDir "next-standalone"
 $NextPublic = Join-Path $BundleDir "next-public"
 $NextStatic = Join-Path $BundleDir "next-static"
@@ -14,7 +14,7 @@ Write-Host "Already downloaded files are skipped (resume-friendly)." -Foreground
 Write-Host ""
 
 # Ensure bundle dirs exist
-foreach ($dir in @($BundleDir, $WheelsDir, $ModelsDir, $FastembedCache, $NextStandalone, $NextPublic, $NextStatic)) {
+foreach ($dir in @($BundleDir, $WheelsDir, $ModelsDir, $ChromaCacheDir, $NextStandalone, $NextPublic, $NextStatic)) {
     New-Item -ItemType Directory -Path $dir -Force | Out-Null
 }
 
@@ -86,16 +86,24 @@ if ($wheelCount -gt 0) {
     Write-Host "      $wheelCount wheels" -ForegroundColor Green
 }
 
-# ── 5/6: Fastembed model cache ──────────────────────────────────
-$cacheFiles = Get-ChildItem $FastembedCache -Recurse -File -ErrorAction SilentlyContinue
+# ── 5/6: Chromadb ONNX model cache ──────────────────────────────
+$cacheFiles = Get-ChildItem $ChromaCacheDir -Recurse -File -ErrorAction SilentlyContinue
 $cacheSize = ($cacheFiles | Measure-Object -Property Length -Sum).Sum
 if ($cacheSize -gt 1MB) {
-    Write-Host "[5/6] Fastembed model already cached ($([math]::Round($cacheSize / 1MB, 1)) MB), skipping" -ForegroundColor Yellow
+    Write-Host "[5/6] Chromadb ONNX model already cached ($([math]::Round($cacheSize / 1MB, 1)) MB), skipping" -ForegroundColor Yellow
 } else {
-    Write-Host "[5/6] Downloading fastembed model (all-MiniLM-L6-v2)..." -ForegroundColor Green
-    $env:FASTEMBED_CACHE_DIR = $FastembedCache
-    python -c "from chromadb.utils.embedding_functions import FastEmbedEmbeddingFunction; FastEmbedEmbeddingFunction('all-MiniLM-L6-v2')" 2>&1 | Out-Null
-    $cacheFiles = Get-ChildItem $FastembedCache -Recurse -File -ErrorAction SilentlyContinue
+    Write-Host "[5/6] Downloading chromadb ONNX model (all-MiniLM-L6-v2)..." -ForegroundColor Green
+    New-Item -ItemType Directory -Path $ChromaCacheDir -Force | Out-Null
+    $SavedHome = $env:HOME
+    $env:HOME = $BundleDir
+    python -c "from chromadb.utils.embedding_functions import ONNXMiniLM_L6_V2; ONNXMiniLM_L6_V2()(['test'])" 2>&1 | Out-Null
+    $env:HOME = $SavedHome
+    # Move from $BundleDir/.cache/chroma to $ChromaCacheDir
+    if (Test-Path (Join-Path $BundleDir ".cache\chroma")) {
+        Move-Item -Path (Join-Path $BundleDir ".cache\chroma\*") -Destination $ChromaCacheDir -Force
+        Remove-Item -Path (Join-Path $BundleDir ".cache") -Recurse -Force
+    }
+    $cacheFiles = Get-ChildItem $ChromaCacheDir -Recurse -File -ErrorAction SilentlyContinue
     $cacheSize = ($cacheFiles | Measure-Object -Property Length -Sum).Sum
     Write-Host "      $([math]::Round($cacheSize / 1MB, 1)) MB cached" -ForegroundColor Green
 }

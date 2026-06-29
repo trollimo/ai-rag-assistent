@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.2.0 (2026-06-29)
+
+### Fixed
+- ONNX model pre-cache in assistant-container Dockerfiles: `FastEmbedEmbeddingFunction` → `ONNXMiniLM_L6_V2()(['test'])` so the model is actually downloaded during build instead of at runtime
+- Offline bundle: chromadb cache path corrected from `fastembed-cache` → `chroma-cache` (`/root/.cache/chroma`)
+- `prepare-offline-bundle.ps1`: downloads model using `ONNXMiniLM_L6_V2` matching the retriever class
+
 ## 1.4.0 (2026-06-29)
 
 ### Changed

@@ -23,7 +23,7 @@ COPY backend/requirements.txt /app/backend/requirements.txt
 RUN pip install --no-cache-dir -r /app/backend/requirements.txt
 
 # Fastembed cache (stable)
-COPY offline-bundle/fastembed-cache /root/.cache/fastembed
+COPY offline-bundle/chroma-cache /root/.cache/chroma
 
 # ── llama-server + GGUF model ───────────────────────────────────
 # Full dist copied so CPU backends (.so plugins) are found at runtime
