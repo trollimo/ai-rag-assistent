@@ -2,7 +2,8 @@ param(
     [switch]$Build,
     [switch]$Run,
     [string[]]$Source,
-    [string]$Tag
+    [string]$Tag,
+    [string]$Config
 )
 
 $ErrorActionPreference = "Stop"
@@ -28,11 +29,25 @@ if ($Build -or -not $Run) {
     Write-Host ""
 }
 
+# ── Config ─────────────────────────────────────────────────────────
+$configMount = @()
+if ($Config) {
+    $resolvedConfig = (Resolve-Path $Config -ErrorAction SilentlyContinue).Path
+    if (-not $resolvedConfig) {
+        Write-Host "[!] Config file not found: $Config" -ForegroundColor Red
+        exit 1
+    }
+    $configMount = @("-v", "${resolvedConfig}:/rag/config/rag-sources.yaml:ro")
+    Write-Host "  [config] ${resolvedConfig}" -ForegroundColor Gray
+} else {
+    Write-Host "  [config] built-in (config/rag-sources.yaml)" -ForegroundColor Gray
+}
+
 # ── Run ────────────────────────────────────────────────────────────
 if ($Run -or -not $Build) {
     $composeFile = Join-Path $ProjectRoot "docker-compose.yml"
 
-    $dockerArgs = @("run", "--rm")
+    $dockerArgs = @("run", "--rm") + $configMount
 
     if ($Source) {
         $idx = 0
