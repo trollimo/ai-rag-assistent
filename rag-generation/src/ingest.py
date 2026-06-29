@@ -21,14 +21,22 @@ def load_config():
         return yaml.safe_load(f)
 
 
-def iter_md_files(root):
-    yield from Path(root).rglob("*.md")
+def iter_md_files(root, patterns):
+    if not patterns:
+        patterns = ["**/*.md"]
+    seen = set()
+    for pat in patterns:
+        for f in Path(root).glob(pat):
+            resolved = f.resolve()
+            if resolved not in seen:
+                seen.add(resolved)
+                yield resolved
 
 
 def main():
     cfg = load_config()
     client = chromadb.PersistentClient(
-        path=str(BASE_DIR / cfg["storage"]["path"].lstrip("./"))
+        path=str((BASE_DIR / cfg["storage"]["path"]).resolve())
     )
     embedding_func = ONNXMiniLM_L6_V2()
     collection = client.get_or_create_collection(
@@ -40,16 +48,20 @@ def main():
     source_names = []
 
     for source in cfg["sources"]:
-        source_dir = BASE_DIR / source["path"].lstrip("./")
+        source_dir = (BASE_DIR / source["path"]).resolve()
         if not source_dir.exists():
             log.warning("Source dir not found: %s", source_dir)
             continue
-        files = list(iter_md_files(source_dir))
+        files = list(iter_md_files(source_dir, source.get("include")))
         if not files:
             log.warning("No .md files in %s", source["path"])
             continue
         for file_path in files:
-            log.info("Parsing %s", file_path.relative_to(BASE_DIR))
+            try:
+                display = file_path.relative_to(BASE_DIR)
+            except ValueError:
+                display = file_path
+            log.info("Parsing %s", display)
             text = file_path.read_text(encoding="utf-8")
             chunks = split_markdown(
                 text,
