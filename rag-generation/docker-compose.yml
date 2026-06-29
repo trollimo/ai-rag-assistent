@@ -1,0 +1,13 @@
+services:
+  generator:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: rag-generator
+    container_name: rag-generator
+    volumes:
+      - ./output:/rag/output
+    # Раскомментируй и укажи свои папки с .md файлами:
+    # - c:\skills:/external/skills:ro
+    environment:
+      - RAG_OUTPUT=/rag/output
