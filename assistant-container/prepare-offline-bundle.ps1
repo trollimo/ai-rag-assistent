@@ -53,9 +53,9 @@ function Download-IfMissing {
 }
 
 # ── 1/6: Ollama tar.zst archive ────────────────────────────────
-$OllamaDest = Join-Path $BundleDir "ollama-linux-amd64.tar.zst"
-Download-IfMissing -Url "https://ollama.com/download/ollama-linux-amd64.tar.zst" `
-    -Dest $OllamaDest -Label "Ollama archive (Linux amd64, tar.zst)" -MinSize 1GB
+# $OllamaDest = Join-Path $BundleDir "ollama-linux-amd64.tar.zst"
+# Download-IfMissing -Url "https://ollama.com/download/ollama-linux-amd64.tar.zst" `
+#     -Dest $OllamaDest -Label "Ollama archive (Linux amd64, tar.zst)" -MinSize 1GB
 
 # ── 2/6: qwen2.5 GGUF ──────────────────────────────────────────
 $GgufDest = Join-Path $ModelsDir "Qwen2.5-1.5B-Instruct-Q4_K_M.gguf"
@@ -76,7 +76,7 @@ if ($wheelCount -gt 0) {
     Write-Host "[4/6] Python wheels already cached ($wheelCount wheels), skipping" -ForegroundColor Yellow
 } else {
     Write-Host "[4/6] Downloading Python wheels..." -ForegroundColor Green
-    $req = Join-Path $ScriptDir "backend" "requirements.txt"
+    $req = Join-Path $ScriptDir "backend/requirements.txt"
     pip download --only-binary :all: --dest $WheelsDir -r $req 2>&1 | Out-Null
     if ($LASTEXITCODE -ne 0) {
         Write-Host "      Some packages have no binary wheel, trying with source..." -ForegroundColor Yellow
@@ -94,14 +94,10 @@ if ($cacheSize -gt 1MB) {
 } else {
     Write-Host "[5/6] Downloading chromadb ONNX model (all-MiniLM-L6-v2)..." -ForegroundColor Green
     New-Item -ItemType Directory -Path $ChromaCacheDir -Force | Out-Null
-    $SavedHome = $env:HOME
-    $env:HOME = $BundleDir
-    python -c "from chromadb.utils.embedding_functions import ONNXMiniLM_L6_V2; ONNXMiniLM_L6_V2()(['test'])" 2>&1 | Out-Null
-    $env:HOME = $SavedHome
-    # Move from $BundleDir/.cache/chroma to $ChromaCacheDir
-    if (Test-Path (Join-Path $BundleDir ".cache\chroma")) {
-        Move-Item -Path (Join-Path $BundleDir ".cache\chroma\*") -Destination $ChromaCacheDir -Force
-        Remove-Item -Path (Join-Path $BundleDir ".cache") -Recurse -Force
+    python -c "from chromadb.utils.embedding_functions import ONNXMiniLM_L6_V2; ONNXMiniLM_L6_V2()(['test'])"
+    $SourceCache = Join-Path $env:USERPROFILE ".cache\chroma"
+    if (Test-Path $SourceCache) {
+        Copy-Item -Path "$SourceCache\*" -Destination $ChromaCacheDir -Recurse -Force
     }
     $cacheFiles = Get-ChildItem $ChromaCacheDir -Recurse -File -ErrorAction SilentlyContinue
     $cacheSize = ($cacheFiles | Measure-Object -Property Length -Sum).Sum
