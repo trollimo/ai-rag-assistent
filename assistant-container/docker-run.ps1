@@ -2,11 +2,20 @@ param(
     [switch]$Build,
     [switch]$Logs,
     [switch]$Stop,
-    [switch]$Restart
+    [switch]$Restart,
+    [string]$Tag
 )
 
 $ErrorActionPreference = "Stop"
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
+
+function Tag-Image {
+    $verFile = Join-Path $ScriptDir "VERSION"
+    $version = if ($Tag) { $Tag } elseif (Test-Path $verFile) { (Get-Content $verFile).Trim() } else { "latest" }
+    $image = "rag-offline"
+    Write-Host "  Tagging ${image}:latest as ${image}:${version}" -ForegroundColor Gray
+    docker tag "${image}:latest" "${image}:${version}" 2>&1 | Out-Null
+}
 $ComposeFile = Join-Path $ScriptDir "docker-compose.yml"
 
 if ($Stop) {
@@ -41,6 +50,7 @@ if (-not $HasBundle) {
     }
     $elapsed = [math]::Round(((Get-Date) - $start).TotalMinutes, 1)
     Write-Host "[v] Build complete in ${elapsed}min" -ForegroundColor Green
+    Tag-Image
     Write-Host ""
 }
 
@@ -54,6 +64,7 @@ if ($Build) {
     }
     $elapsed = [math]::Round(((Get-Date) - $start).TotalMinutes, 1)
     Write-Host "[v] Rebuild complete in ${elapsed}min" -ForegroundColor Green
+    Tag-Image
     Write-Host ""
 }
 
