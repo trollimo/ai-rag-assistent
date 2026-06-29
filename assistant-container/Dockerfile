@@ -42,7 +42,7 @@ COPY backend/requirements.txt /app/backend/requirements.txt
 RUN pip install --no-cache-dir -r /app/backend/requirements.txt
 
 # Pre-cache fastembed model (all-MiniLM-L6-v2, ~90 MB ONNX)
-RUN python -c "from chromadb.utils.embedding_functions import FastEmbedEmbeddingFunction; FastEmbedEmbeddingFunction('all-MiniLM-L6-v2')"
+RUN python -c "from chromadb.utils.embedding_functions import ONNXMiniLM_L6_V2; ONNXMiniLM_L6_V2()(['test'])"
 
 # Backend source
 COPY backend /app/backend
