@@ -66,12 +66,11 @@
 - [x] RAG-generation: ингрест + чанкинг + chromadb
 - [x] Embeddings: fastembed (ONNX, без torch)
 - [x] FastAPI backend + retriever
-- [x] Dockerfile (онлайн) — curl ollama + pip + next build
-- [x] Dockerfile.offline — multi-stage: llama-server + python:3.11-slim + node (собран, 1.19 GB)
+- [x] Dockerfile (offline) — multi-stage: llama-server + python:3.11-slim + node (собран, 1.19 GB)
+- [x] Dockerfile (online) — multi-stage: llama-server + python:3.11-slim + node, модель качается с HuggingFace
 - [x] prepare-offline-bundle.ps1 — скачивает бандл для офлайна
 - [x] MCP server (stdio + HTTP SSE)
 - [x] Web UI (Next.js чат)
-- [ ] Dockerfile (online) — переписать под llama-server
 - [x] backend/core/settings.py — заменить OLLAMA_HOST на LLAMA_HOST
 - [x] backend/api/main.py — заменить Ollama API на OpenAI-формат llama-server
 - [x] docker-compose.yml — порт 11434 → 8080
