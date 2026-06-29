@@ -11,7 +11,7 @@
 - Образ собран: `rag-assistant-offline:test` — **1.19 GB**
 - `backend/core/settings.py` — OLLAMA_HOST/LLAMA_MODEL → LLAMA_HOST/LLAMA_MODEL
 - `backend/api/main.py` — `_ask_ollama` на `_ask_llama`, API с `/api/generate` на `/v1/chat/completions`
-- `docker-compose.yml` — порт 11434 → 8080, OLLAMA_HOST → LLAMA_HOST
+- `docker-compose.yml` — порт 11434 → 9080, OLLAMA_HOST → LLAMA_HOST
 - CORS middleware добавлен в main.py
 - Полный smoke-тест (4/4) пройден
 
@@ -31,7 +31,7 @@ from pathlib import Path
 RAG_DB_PATH = Path("/data/chroma_db")
 COLLECTION_NAME = "knowledge_base"
 EMBEDDINGS_MODEL = "all-MiniLM-L6-v2"
-LLAMA_HOST = "http://localhost:8080"
+LLAMA_HOST = "http://localhost:9080"
 LLAMA_MODEL = "qwen2.5"
 ```
 
@@ -64,15 +64,15 @@ answer = await _ask_ollama(prompt)  # → answer = await _ask_llama(prompt)
 
 ## 3. `docker-compose.yml`
 
-Заменить порт `11434` → `8080`, `OLLAMA_HOST` → `LLAMA_HOST`:
+Заменить порт `11434` → `9080`, `OLLAMA_HOST` → `LLAMA_HOST`:
 
 ```yaml
 ports:
   - "3000:3000"
   - "8000:8000"
-  - "8080:8080"
+  - "9080:9080"
 environment:
-  - LLAMA_HOST=http://localhost:8080
+  - LLAMA_HOST=http://localhost:9080
 ```
 
 ## 4. `Dockerfile` (online)
@@ -119,10 +119,10 @@ ENV LLAMA_HOST=http://localhost:8080
 ENV LLAMA_MODEL=qwen2.5
 ENV NODE_ENV=production
 
-EXPOSE 8080 8000 3000
+EXPOSE 9080 8000 9081 3000
 
 CMD ["sh", "-c", "\
-  llama-server --host 0.0.0.0 --port 8080 -m /models/qwen2.5.gguf --alias qwen2.5 & \
+  llama-server --host 0.0.0.0 --port 9080 -m /models/qwen2.5.gguf --alias qwen2.5 & \
   sleep 2 && \
   uvicorn backend.api.main:app --host 0.0.0.0 --port 8000 & \
   node /app/web/server.js"]

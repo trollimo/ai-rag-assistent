@@ -8,13 +8,13 @@ services:
     ports:
       - "3000:3000"
       - "8000:8000"
-      - "8001:8001"
-      - "8080:8080"
+      - "9081:9081"
+      - "9080:9080"
     volumes:
       - ../rag-generation/output/chroma_db:/data/chroma_db
     environment:
       - RAG_DB_PATH=/data/chroma_db
-      - LLAMA_HOST=http://localhost:8080
+      - LLAMA_HOST=http://localhost:9080
       - LLAMA_MODEL=qwen2.5
       - LOG_LEVEL=INFO
       - NEXT_PUBLIC_FASTAPI_URL=http://localhost:8000

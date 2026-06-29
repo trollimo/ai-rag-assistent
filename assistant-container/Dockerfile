@@ -16,7 +16,7 @@ RUN apt-get update && apt-get install -y curl ca-certificates && rm -rf /var/lib
 # ── Stage 3: Final image ──────────────────────────────────────────
 FROM python:3.11-slim
 
-ENV LLAMA_HOST=http://localhost:8080
+ENV LLAMA_HOST=http://localhost:9080
 ENV LLAMA_MODEL=qwen2.5
 ENV NODE_ENV=production
 
@@ -54,10 +54,10 @@ COPY --from=web-builder /app/public ./public
 COPY --from=web-builder /app/.next/static ./.next/static
 
 WORKDIR /app
-EXPOSE 8080 8000 8001 3000
+EXPOSE 9080 8000 9081 3000
 
 CMD ["sh", "-c", "\
-  llama-server --host 0.0.0.0 --port 8080 -m /models/qwen2.5.gguf --alias qwen2.5 & \
+  llama-server --host 0.0.0.0 --port 9080 -m /models/qwen2.5.gguf --alias qwen2.5 & \
   sleep 2 && \
   uvicorn backend.api.main:app --host 0.0.0.0 --port 8000 & \
   python -m backend.mcp.server sse & \

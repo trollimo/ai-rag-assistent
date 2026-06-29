@@ -32,7 +32,7 @@
     │   ├── app/
     │   ├── components/
     │   └── styles/
-    ├── Dockerfile             # TODO: переписать под llama-server
+    ├── Dockerfile             # online: multi-stage llama-server + python:3.11-slim + node
     ├── Dockerfile.offline     # multi-stage: llama-server + python:3.11-slim + node
     ├── prepare-offline-bundle.ps1  # скачивает всё для офлайн-сборки
     ├── docker-compose.yml
@@ -51,7 +51,7 @@
 | Embeddings | fastembed / all-MiniLM-L6-v2 (ONNX, без torch) |
 | Backend API | FastAPI (port 8000) |
 | Frontend | Next.js + TailwindCSS (port 3000) |
-| LLM Runtime | llama-server (port 8080) + qwen2.5-1.5b-instruct Q4_K_M (llama.cpp) |
+| LLM Runtime | llama-server (port 9080) + qwen2.5-1.5b-instruct Q4_K_M (llama.cpp) |
 | MCP | FastMCP (stdio transport, отдельный процесс) |
 | Контейнеры | Docker + docker-compose (один контейнер) |
 
@@ -64,6 +64,7 @@
 ## 📌 Состояние
 
 - [x] RAG-generation: ингрест + чанкинг + chromadb
+- [x] RAG-generation Dockerfile: python:3.11-slim + chromadb + fastembed (164 MB)
 - [x] Embeddings: fastembed (ONNX, без torch)
 - [x] FastAPI backend + retriever
 - [x] Dockerfile (offline) — multi-stage: llama-server + python:3.11-slim + node (собран, 1.19 GB)
@@ -73,4 +74,4 @@
 - [x] Web UI (Next.js чат)
 - [x] backend/core/settings.py — заменить OLLAMA_HOST на LLAMA_HOST
 - [x] backend/api/main.py — заменить Ollama API на OpenAI-формат llama-server
-- [x] docker-compose.yml — порт 11434 → 8080
+- [x] docker-compose.yml — порт 11434 → 9080

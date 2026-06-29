@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.1.0 (2026-06-29)
+
+### Changed
+- Ports: llama-server 8080→9080, MCP SSE 8001→9081
+- Bump rag-generation and assistant-container to 1.1.0
+
 ## 1.0.0 (2026-06-29)
 
 ### Added

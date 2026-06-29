@@ -14,11 +14,11 @@ Write-Host "[1] Health checks" -ForegroundColor Yellow
 Check "GET / (FastAPI)" { (curl.exe -s "http://localhost:8000/" | ConvertFrom-Json).status }
 Check "Web UI" { if ((curl.exe -s "http://localhost:3000/") -match "RAG Assistant") { $true } else { throw "not found" } }
 
-Write-Host "`n[2] LLM direct (port 8080)" -ForegroundColor Yellow
+Write-Host "`n[2] LLM direct (port 9080)" -ForegroundColor Yellow
 $body = @{model="qwen2.5"; messages=@(@{role="user"; content=$Question}); stream=$false} | ConvertTo-Json
 Set-Content "$env:TEMP\ragt.json" -Value $body -Encoding UTF8
 $ans = Check "POST /v1/chat/completions" {
-    $r = curl.exe -s "http://localhost:8080/v1/chat/completions" -H "Content-Type: application/json" -d "@$env:TEMP\ragt.json" | ConvertFrom-Json
+    $r = curl.exe -s "http://localhost:9080/v1/chat/completions" -H "Content-Type: application/json" -d "@$env:TEMP\ragt.json" | ConvertFrom-Json
     $r.choices[0].message.content
 }
 if ($ans) { Write-Host "  --> $($ans.Substring(0, [Math]::Min(120, $ans.Length)))..." -ForegroundColor DarkGray }
