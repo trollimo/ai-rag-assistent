@@ -1,9 +1,17 @@
+import logging
 from pathlib import Path
 import json
 import yaml
 import chromadb
 from chromadb.utils.embedding_functions import ONNXMiniLM_L6_V2
 from chunking import split_markdown, generate_manifest
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(message)s",
+    datefmt="%H:%M:%S",
+)
+log = logging.getLogger("rag-generator")
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -34,10 +42,10 @@ def main():
     for source in cfg["sources"]:
         source_dir = BASE_DIR / source["path"].lstrip("./")
         if not source_dir.exists():
-            print(f"  [!] source dir not found: {source_dir}")
+            log.warning("Source dir not found: %s", source_dir)
             continue
         for file_path in iter_md_files(source_dir):
-            print(f"  [>] {file_path.relative_to(BASE_DIR)}")
+            log.info("Parsing %s", file_path.relative_to(BASE_DIR))
             text = file_path.read_text(encoding="utf-8")
             chunks = split_markdown(
                 text,
@@ -56,7 +64,7 @@ def main():
             source_names.append(source["name"])
 
     if docs:
-        print(f"\n  [*] Writing {len(docs)} chunks to ChromaDB ...")
+        log.info("Writing %d chunks to ChromaDB ...", len(docs))
         collection.add(ids=ids, documents=docs, metadatas=metas)
 
     manifest = generate_manifest(
@@ -68,8 +76,8 @@ def main():
     with open(manifest_path, "w", encoding="utf-8") as f:
         json.dump(manifest, f, indent=2, ensure_ascii=False)
 
-    print(f"\n  [v] Done! Indexed {len(docs)} chunks")
-    print(f"  [~] Manifest: {manifest_path}")
+    log.info("Done! Indexed %d chunks", len(docs))
+    log.info("Manifest: %s", manifest_path)
 
 
 if __name__ == "__main__":
