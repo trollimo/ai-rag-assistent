@@ -83,7 +83,7 @@ def main():
 
     if docs:
         log.info("Writing %d chunks to ChromaDB ...", len(docs))
-        collection.add(ids=ids, documents=docs, metadatas=metas)
+        collection.upsert(ids=ids, documents=docs, metadatas=metas)
 
     manifest = generate_manifest(
         docs, source_names,

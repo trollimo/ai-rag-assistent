@@ -13,6 +13,11 @@
 - Offline bundle: chromadb cache path corrected from `fastembed-cache` → `chroma-cache` (`/root/.cache/chroma`)
 - `prepare-offline-bundle.ps1`: downloads model using `ONNXMiniLM_L6_V2` matching the retriever class
 
+## 1.5.0 (2026-06-29)
+
+### Changed
+- `collection.add()` → `collection.upsert()` in ingest.py: re-running generator now updates changed .md files instead of crashing on duplicate IDs
+
 ## 1.4.0 (2026-06-29)
 
 ### Changed
