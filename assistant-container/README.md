@@ -59,4 +59,22 @@ Dockerfile        # online (модель качается с HF)
 Dockerfile.offline # offline (из offline-bundle/)
 docker-compose.yml
 VERSION
+
+## Opencode Integration
+
+Для подключения opencode к MCP-серверу создай в корне проекта `.opencode.json`:
+
+```json
+{
+  "mcp_servers": {
+    "knowledge": {
+      "type": "remote",
+      "url": "http://localhost:9081/sse"
+    }
+  }
+}
+```
+
+После этого opencode получит инструмент `search_docs` — поиск по RAG-базе.
+Описание инструмента (docstring, по которому LLM решает вызывать его) задаётся в файле `backend/config/mcp-tools.yaml`. Можешь отредактировать его под свои источники знаний — правки применяются после перезапуска контейнера.
 ```

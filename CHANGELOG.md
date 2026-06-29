@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.3.0 (2026-06-29)
+
+### Added
+- MCP tool description now loaded from `backend/config/mcp-tools.yaml` — editable without rebuild
+- `search_docs` now exposes a docstring to guide the AI agent on when to use it
+
 ## 1.2.0 (2026-06-29)
 
 ### Fixed
