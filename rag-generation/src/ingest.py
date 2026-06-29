@@ -17,7 +17,9 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 
 
 def load_config():
-    with open(BASE_DIR / "config" / "rag-sources.yaml", "r", encoding="utf-8") as f:
+    config_path = BASE_DIR / "config" / "rag-sources.yaml"
+    log.info("Loading config: %s", config_path)
+    with open(config_path, "r", encoding="utf-8") as f:
         return yaml.safe_load(f)
 
 

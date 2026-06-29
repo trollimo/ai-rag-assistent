@@ -7,7 +7,12 @@ services:
     container_name: rag-generator
     volumes:
       - ./output:/rag/output
-    # Раскомментируй и укажи свои папки с .md файлами:
+      - ./docs:/rag/docs:ro
+      # Раскомментируй для кастомного конфига (вместо вшитого config/rag-sources.yaml):
+      # - ./my-sources.yaml:/rag/config/rag-sources.yaml:ro
+    # Внешние папки с .md (для -Source в rag-build.ps1):
     # - c:\skills:/external/skills:ro
+    # Раскомментируй для отладки (контейнер живёт 1000с вместо запуска ingest.py):
+    # command: sleep 1000
     environment:
       - RAG_OUTPUT=/rag/output
