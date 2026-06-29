@@ -44,7 +44,11 @@ def main():
         if not source_dir.exists():
             log.warning("Source dir not found: %s", source_dir)
             continue
-        for file_path in iter_md_files(source_dir):
+        files = list(iter_md_files(source_dir))
+        if not files:
+            log.warning("No .md files in %s", source["path"])
+            continue
+        for file_path in files:
             log.info("Parsing %s", file_path.relative_to(BASE_DIR))
             text = file_path.read_text(encoding="utf-8")
             chunks = split_markdown(
