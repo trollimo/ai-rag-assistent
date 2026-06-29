@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.2.0 (2026-06-29)
+
+### Fixed
+- Source paths with `../` (e.g. `../../skills`) now resolve correctly instead of being broken by `lstrip("./")`
+- File display for paths outside `BASE_DIR` no longer crashes
+
+### Added
+- Respect `include` glob patterns from `rag-sources.yaml`
+- Warn when a source dir exists but no files match the pattern
+
 ## 1.1.0 (2026-06-29)
 
 ### Changed
