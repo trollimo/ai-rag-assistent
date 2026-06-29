@@ -81,7 +81,7 @@ Write-Host "Waiting for services..." -ForegroundColor Gray
 Start-Sleep -Seconds 8
 
 $services = @(
-    @{ Name = "llama-server (LLM)"; Port = 8080; Path = "/" },
+    @{ Name = "llama-server (LLM)"; Port = 9080; Path = "/" },
     @{ Name = "FastAPI (RAG)";     Port = 8000; Path = "/" },
     @{ Name = "Web UI";           Port = 3000; Path = "/" }
 )
@@ -101,7 +101,7 @@ Write-Host "[v] RAG Assistant is running!" -ForegroundColor Green
 Write-Host ""
 Write-Host "  Web UI: http://localhost:3000" -ForegroundColor Cyan
 Write-Host "  API:    http://localhost:8000" -ForegroundColor Cyan
-Write-Host "  MCP:    http://localhost:8001/sse" -ForegroundColor Cyan
+Write-Host "  MCP:    http://localhost:9081/sse" -ForegroundColor Cyan
 Write-Host ""
 Write-Host "Commands:" -ForegroundColor Gray
 Write-Host "  .\assistant-container\docker-run.ps1 -Logs    tail logs" -ForegroundColor White

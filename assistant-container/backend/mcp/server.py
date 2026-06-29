@@ -36,6 +36,6 @@ if __name__ == "__main__":
     transport = sys.argv[1] if len(sys.argv) > 1 else "stdio"
     logger.info("MCP server starting transport=%s", transport)
     if transport == "sse":
-        uvicorn.run(mcp.sse_app(), host="0.0.0.0", port=8001)
+        uvicorn.run(mcp.sse_app(), host="0.0.0.0", port=9081)
     else:
         mcp.run(transport="stdio")

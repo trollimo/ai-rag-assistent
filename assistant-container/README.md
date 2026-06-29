@@ -47,8 +47,8 @@
 |--------|-----|
 | Web UI    | http://localhost:3000 |
 | API       | http://localhost:8000 |
-| MCP SSE   | http://localhost:8001/sse |
-| LLM API   | http://localhost:8080 |
+| MCP SSE   | http://localhost:9081/sse |
+| LLM API   | http://localhost:9080 |
 
 ## Структура
 
