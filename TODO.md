@@ -1,5 +1,17 @@
 # TODO
 
+## Параметризовать embedding-модель
+
+Сейчас название модели `sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2` хардкодом в:
+- `rag-generation/src/embedding_fn.py`
+- `assistant-container/backend/rag/embedding_fn.py`
+- `rag-generation/Dockerfile`
+- `assistant-container/Dockerfile`
+- `assistant-container/Dockerfile.offline`
+- `assistant-container/prepare-offline-bundle.ps1`
+
+Вынести в `config/rag-sources.yaml` (для генератора) и `mcp-tools.yaml` (для сервиса). Тогда смена модели без пересборки образов.
+
 ## MCP timeout на другом ПК
 
 ### Логи (d:\temp\opencode-timeout.txt)

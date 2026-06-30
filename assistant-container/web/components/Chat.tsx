@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect } from "react";
 import ReactMarkdown from "react-markdown";
+import TopicsPanel from "./TopicsPanel";
 
 type Message = {
   role: "user" | "assistant";
@@ -82,6 +83,7 @@ export default function Chat() {
           Отправить
         </button>
       </div>
+      <TopicsPanel />
     </div>
   );
 }

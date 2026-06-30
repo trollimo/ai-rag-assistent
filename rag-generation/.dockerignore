@@ -6,3 +6,4 @@ output/
 README.md
 VERSION
 .dockerignore
+fastembed-cache/

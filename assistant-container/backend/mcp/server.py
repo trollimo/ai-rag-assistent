@@ -22,7 +22,9 @@ mcp = FastMCP("knowledge-rag")
 
 
 @mcp.tool(description=tool_config["tools"]["search_docs"]["description"].strip())
-def search_docs(query: str, top_k: int = 5):
+def search_docs(query: str, top_k: int | None = None):
+    if top_k is None:
+        top_k = tool_config.get("search", {}).get("default_top_k", 3)
     logger.info("MCP tool search_docs query=%s top_k=%d", query, top_k)
     try:
         resp = httpx.post(
@@ -37,6 +39,28 @@ def search_docs(query: str, top_k: int = 5):
         return data
     except Exception as e:
         logger.error("MCP tool search_docs error: %s", e)
+        return {"error": str(e)}
+
+
+@mcp.tool(description=tool_config["tools"]["list_topics"]["description"].strip())
+def list_topics(filter: str = "", top_k: int | None = None):
+    logger.info("MCP tool list_topics filter=%s top_k=%s", filter, top_k)
+    try:
+        body = {"filter": filter}
+        if top_k is not None:
+            body["top_k"] = top_k
+        resp = httpx.post(
+            f"{RAG_API_URL}/topics",
+            json=body,
+            timeout=30,
+        )
+        resp.raise_for_status()
+        data = resp.json()
+        count = len(data.get("topics", []))
+        logger.debug("MCP tool list_topics result count=%d", count)
+        return data
+    except Exception as e:
+        logger.error("MCP tool list_topics error: %s", e)
         return {"error": str(e)}
 
 

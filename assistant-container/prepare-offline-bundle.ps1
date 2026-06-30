@@ -4,6 +4,7 @@ $BundleDir = Join-Path $ScriptDir "offline-bundle"
 $WheelsDir = Join-Path $BundleDir "wheels"
 $ModelsDir = Join-Path $BundleDir "models"
 $ChromaCacheDir = Join-Path $BundleDir "chroma-cache"
+$FastembedCacheDir = Join-Path $BundleDir "fastembed-cache"
 $NextStandalone = Join-Path $BundleDir "next-standalone"
 $NextPublic = Join-Path $BundleDir "next-public"
 $NextStatic = Join-Path $BundleDir "next-static"
@@ -14,7 +15,7 @@ Write-Host "Already downloaded files are skipped (resume-friendly)." -Foreground
 Write-Host ""
 
 # Ensure bundle dirs exist
-foreach ($dir in @($BundleDir, $WheelsDir, $ModelsDir, $ChromaCacheDir, $NextStandalone, $NextPublic, $NextStatic)) {
+foreach ($dir in @($BundleDir, $WheelsDir, $ModelsDir, $ChromaCacheDir, $FastembedCacheDir, $NextStandalone, $NextPublic, $NextStatic)) {
     New-Item -ItemType Directory -Path $dir -Force | Out-Null
 }
 
@@ -75,36 +76,47 @@ $wheelCount = (Get-ChildItem $WheelsDir -Filter "*.whl" -ErrorAction SilentlyCon
 if ($wheelCount -gt 0) {
     Write-Host "[4/6] Python wheels already cached ($wheelCount wheels), skipping" -ForegroundColor Yellow
 } else {
-    Write-Host "[4/6] Downloading Python wheels..." -ForegroundColor Green
+    Write-Host "[4/6] Downloading Python wheels (linux x86_64)..." -ForegroundColor Green
     $req = Join-Path $ScriptDir "backend/requirements.txt"
-    pip download --only-binary :all: --dest $WheelsDir -r $req 2>&1 | Out-Null
+    pip download --only-binary :all: `
+        --platform manylinux2014_x86_64 --python-version 3.11 `
+        --dest $WheelsDir -r $req 2>&1 | Out-Null
     if ($LASTEXITCODE -ne 0) {
-        Write-Host "      Some packages have no binary wheel, trying with source..." -ForegroundColor Yellow
+        Write-Host "      Some packages have no manylinux wheel, trying with source..." -ForegroundColor Yellow
         pip download --no-deps --dest $WheelsDir -r $req 2>&1 | Out-Null
     }
     $wheelCount = (Get-ChildItem $WheelsDir -Filter "*.whl").Count
     Write-Host "      $wheelCount wheels" -ForegroundColor Green
 }
 
-# ── 5/6: Chromadb ONNX model cache ──────────────────────────────
-$cacheFiles = Get-ChildItem $ChromaCacheDir -Recurse -File -ErrorAction SilentlyContinue
-$cacheSize = ($cacheFiles | Measure-Object -Property Length -Sum).Sum
-if ($cacheSize -gt 1MB) {
-    Write-Host "[5/6] Chromadb ONNX model already cached ($([math]::Round($cacheSize / 1MB, 1)) MB), skipping" -ForegroundColor Yellow
+# ── 6/7: Fastembed model cache ──────────────────────────────────
+$feCacheFiles = Get-ChildItem $FastembedCacheDir -Recurse -File -ErrorAction SilentlyContinue
+$feCacheSize = ($feCacheFiles | Measure-Object -Property Length -Sum).Sum
+if ($feCacheSize -gt 1MB) {
+    Write-Host "[6/7] Fastembed model already cached ($([math]::Round($feCacheSize / 1MB, 1)) MB), skipping" -ForegroundColor Yellow
 } else {
-    Write-Host "[5/6] Downloading chromadb ONNX model (all-MiniLM-L6-v2)..." -ForegroundColor Green
-    New-Item -ItemType Directory -Path $ChromaCacheDir -Force | Out-Null
-    python -c "from chromadb.utils.embedding_functions import ONNXMiniLM_L6_V2; ONNXMiniLM_L6_V2()(['test'])"
-    $SourceCache = Join-Path $env:USERPROFILE ".cache\chroma"
-    if (Test-Path $SourceCache) {
-        Copy-Item -Path "$SourceCache\*" -Destination $ChromaCacheDir -Recurse -Force
+    Write-Host "[6/7] Downloading fastembed model (multilingual-e5-large)..." -ForegroundColor Green
+    New-Item -ItemType Directory -Path $FastembedCacheDir -Force | Out-Null
+    python -c "from fastembed import TextEmbedding; TextEmbedding(model_name='intfloat/multilingual-e5-large').embed(['test'])"
+    # Windows cache (LOCALAPPDATA\Temp) vs Linux cache (~/.cache)
+    $possibleCaches = @(
+        (Join-Path $env:LOCALAPPDATA "Temp\fastembed_cache"),
+        (Join-Path $env:USERPROFILE ".cache\fastembed")
+    )
+    $SourceFe = $null
+    foreach ($p in $possibleCaches) {
+        if (Test-Path $p) { $SourceFe = $p; break }
     }
-    $cacheFiles = Get-ChildItem $ChromaCacheDir -Recurse -File -ErrorAction SilentlyContinue
-    $cacheSize = ($cacheFiles | Measure-Object -Property Length -Sum).Sum
-    Write-Host "      $([math]::Round($cacheSize / 1MB, 1)) MB cached" -ForegroundColor Green
+    if ($SourceFe) {
+        Write-Host "      Copying from $SourceFe" -ForegroundColor Gray
+        Copy-Item -Path "$SourceFe\*" -Destination $FastembedCacheDir -Recurse -Force
+    }
+    $feCacheFiles = Get-ChildItem $FastembedCacheDir -Recurse -File -ErrorAction SilentlyContinue
+    $feCacheSize = ($feCacheFiles | Measure-Object -Property Length -Sum).Sum
+    Write-Host "      $([math]::Round($feCacheSize / 1MB, 1)) MB cached" -ForegroundColor Green
 }
 
-# ── 6/6: Next.js build ─────────────────────────────────────────
+# ── 7/7: Next.js build ─────────────────────────────────────────
 $nextFiles = Get-ChildItem $NextStandalone -Recurse -File -ErrorAction SilentlyContinue
 $nextSize = ($nextFiles | Measure-Object -Property Length -Sum).Sum
 if ($nextSize -gt 1MB) {

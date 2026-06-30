@@ -16,3 +16,4 @@ services:
     # command: sleep 1000
     environment:
       - RAG_OUTPUT=/rag/output
+      - HF_HUB_OFFLINE=1

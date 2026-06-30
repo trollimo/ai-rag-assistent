@@ -20,10 +20,14 @@ COPY --from=node-source /usr/local/bin/node /usr/local/bin/node
 # ── Python deps (cached: only invalidated when requirements.txt changes) ──
 WORKDIR /app
 COPY backend/requirements.txt /app/backend/requirements.txt
-RUN pip install --no-cache-dir -r /app/backend/requirements.txt
+COPY --from=wheels . /tmp/wheels
+RUN --mount=type=cache,target=/root/.cache/pip \
+    pip install --find-links=/tmp/wheels -r /app/backend/requirements.txt
 
 # Fastembed cache (stable)
-COPY offline-bundle/chroma-cache /root/.cache/chroma
+COPY --from=fastembed-cache . /root/.cache/fastembed
+ENV FASTEMBED_CACHE_PATH=/root/.cache/fastembed
+ENV HF_HUB_OFFLINE=1
 
 # ── llama-server + GGUF model ───────────────────────────────────
 # Full dist copied so CPU backends (.so plugins) are found at runtime
@@ -31,15 +35,18 @@ COPY --from=llama-source /opt/llama-b9804 /opt/llama
 RUN ln -sf /opt/llama/llama-server /usr/local/bin/llama-server
 ENV LD_LIBRARY_PATH=/opt/llama
 
-COPY offline-bundle/models/Qwen2.5-1.5B-Instruct-Q4_K_M.gguf /models/qwen2.5.gguf
+COPY --from=gguf-model ./Qwen2.5-1.5B-Instruct-Q4_K_M.gguf /models/qwen2.5.gguf
 
 # ── Application code ────────────────────────────────────────────
 COPY backend /app/backend
 
 WORKDIR /app/web
-COPY offline-bundle/next-standalone ./
-COPY offline-bundle/next-public ./public
-COPY offline-bundle/next-static ./.next/static
+COPY --from=next-standalone . ./
+COPY --from=next-public . ./public
+COPY --from=next-static . ./.next/static
+
+COPY entrypoint.sh /app/entrypoint.sh
+RUN chmod +x /app/entrypoint.sh
 
 WORKDIR /app
 
@@ -49,9 +56,4 @@ ENV NODE_ENV=production
 
 EXPOSE 9080 8000 9081 3000
 
-CMD ["sh", "-c", "\
-  llama-server --host 0.0.0.0 --port 9080 -m /models/qwen2.5.gguf --alias qwen2.5 & \
-  sleep 2 && \
-  uvicorn backend.api.main:app --host 0.0.0.0 --port 8000 & \
-  python -m backend.mcp.server sse & \
-  node /app/web/server.js"]
+CMD ["/app/entrypoint.sh"]

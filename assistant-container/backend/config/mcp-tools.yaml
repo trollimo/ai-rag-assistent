@@ -1,6 +1,27 @@
+llm:
+  ctx_size: 8192
+  max_tokens: 4096
+
+chat:
+  show_sources: true
+  sources_separator: "\n\n---\n**Источники:** "
+
 tools:
   search_docs:
     description: >
       Search local knowledge base for relevant documentation chunks.
       Use this when the user asks about internal documentation, rules,
       skills, project conventions, or any project-specific knowledge.
+
+  list_topics:
+    description: >
+      List distinct source topics available in the knowledge base.
+      Use this to understand what documentation is indexed, or to
+      check if a specific topic (e.g. "Nexus") is present in the RAG.
+
+search:
+  default_top_k: 5
+
+topics:
+  default_top_k: 100
+  max_topics: 500

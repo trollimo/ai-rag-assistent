@@ -3,7 +3,7 @@ from pathlib import Path
 import json
 import yaml
 import chromadb
-from chromadb.utils.embedding_functions import ONNXMiniLM_L6_V2
+from embedding_fn import MultilingualEmbeddingFunction
 from chunking import split_markdown, generate_manifest
 
 logging.basicConfig(
@@ -40,7 +40,8 @@ def main():
     client = chromadb.PersistentClient(
         path=str((BASE_DIR / cfg["storage"]["path"]).resolve())
     )
-    embedding_func = ONNXMiniLM_L6_V2()
+    model_name = cfg.get("embeddings", {}).get("model", MultilingualEmbeddingFunction.DEFAULT_MODEL)
+    embedding_func = MultilingualEmbeddingFunction(model_name=model_name)
     collection = client.get_or_create_collection(
         name=cfg["storage"]["collection"],
         embedding_function=embedding_func,
