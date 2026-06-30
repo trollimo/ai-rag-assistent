@@ -1,5 +1,32 @@
 # Changelog
 
+## 1.8.0 (2026-06-30) — rag-generation
+
+### Added
+- `AGENTS.md.template` — контекст для AI-агентов (структура проекта, стек, ссылки)
+
+### Changed
+- `embedding_fn.py`: модель `all-MiniLM-L6-v2` → `intfloat/multilingual-e5-large` (русский + английский)
+
+## 1.5.0 (2026-06-30) — assistant-container
+
+### Added
+- MCP-сервер (stdio + HTTP SSE) с инструментами `search_docs` и `list_topics`
+- FastAPI endpoint `/topics` — группировка чанков по источникам
+- Web UI: `TopicsPanel.tsx` — просмотр доступных источников знаний
+- `entrypoint.sh` — запуск всех сервисов (llama-server, uvicorn, MCP)
+- `embedding_fn.py` — обёртка fastembed для ChromaDB (multilingual-e5-large)
+- `mcp-tools.yaml` — конфиг для описания MCP инструментов
+
+### Changed
+- `retriever.py`: `all-MiniLM-L6-v2` → `MultilingualEmbeddingFunction` (мультиязычные эмбеддинги)
+- `main.py`: рефакторинг `/chat` — автодетект источника, контекст с метками `[source: ...]`
+- `settings.py`: загрузка параметров из `mcp-tools.yaml`
+- `docker-compose.yml`: переезд на multi-stage offline-сборку
+- Dockerfiles: переписаны под offline/online multi-stage сборку
+- `docker-run.ps1`: поддержка `-Attach` для отладки
+- `offline-bundle`: подготовка через `prepare-offline-bundle.ps1`
+
 ## 1.7.0 (2026-06-30) — rag-generation
 
 ### Changed
