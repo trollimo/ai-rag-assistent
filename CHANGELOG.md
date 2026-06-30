@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.9.0 (2026-06-30) — rag-generation
+
+### Added
+- `md-content-guidelines.md`: раздел про стоп-слова с полным списком и примером хорошего/плохого запроса
+- `md-content-guidelines.md`: раздел про разделение технологий по разным `.md` файлам
+
+### Fixed
+- `md-content-guidelines.md`: минимальный размер чанка 200→800 (реальный merge threshold)
+
 ## 1.8.0 (2026-06-30) — rag-generation
 
 ### Added
