@@ -25,4 +25,4 @@ storage:
   collection: knowledge_base
 
 embeddings:
-  model: all-MiniLM-L6-v2
+  model: intfloat/multilingual-e5-large

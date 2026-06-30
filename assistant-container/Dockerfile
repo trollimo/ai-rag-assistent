@@ -39,10 +39,12 @@ RUN mkdir -p /models && \
 # Python dependencies
 WORKDIR /app
 COPY backend/requirements.txt /app/backend/requirements.txt
-RUN pip install --no-cache-dir -r /app/backend/requirements.txt
+RUN --mount=type=cache,target=/root/.cache/pip \
+    pip install -r /app/backend/requirements.txt
 
-# Pre-cache fastembed model (all-MiniLM-L6-v2, ~90 MB ONNX)
-RUN python -c "from chromadb.utils.embedding_functions import ONNXMiniLM_L6_V2; ONNXMiniLM_L6_V2()(['test'])"
+# Pre-cache fastembed model (~535 MB ONNX, multilingual-e5-large)
+ENV FASTEMBED_CACHE_PATH=/root/.cache/fastembed
+RUN python -c "from fastembed import TextEmbedding; TextEmbedding(model_name='intfloat/multilingual-e5-large', cache_dir='/root/.cache/fastembed').embed(['test'])"
 
 # Backend source
 COPY backend /app/backend
@@ -53,12 +55,10 @@ COPY --from=web-builder /app/.next/standalone ./
 COPY --from=web-builder /app/public ./public
 COPY --from=web-builder /app/.next/static ./.next/static
 
+COPY entrypoint.sh /app/entrypoint.sh
+RUN chmod +x /app/entrypoint.sh
+
 WORKDIR /app
 EXPOSE 9080 8000 9081 3000
 
-CMD ["sh", "-c", "\
-  llama-server --host 0.0.0.0 --port 9080 -m /models/qwen2.5.gguf --alias qwen2.5 & \
-  sleep 2 && \
-  uvicorn backend.api.main:app --host 0.0.0.0 --port 8000 & \
-  python -m backend.mcp.server sse & \
-  node /app/web/server.js"]
+CMD ["/app/entrypoint.sh"]

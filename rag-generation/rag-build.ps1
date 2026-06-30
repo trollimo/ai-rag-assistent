@@ -3,7 +3,8 @@ param(
     [switch]$Run,
     [string[]]$Source,
     [string]$Tag,
-    [string]$Config
+    [string]$Config,
+    [switch]$UpdateCache
 )
 
 $ErrorActionPreference = "Stop"
@@ -17,9 +18,30 @@ $image = "rag-generator"
 
 # ── Build ──────────────────────────────────────────────────────────
 if ($Build -or -not $Run) {
-    $cache = if ($Build) { @("--no-cache") } else { @() }
+    $cacheSrc = Join-Path $ProjectRoot "..\assistant-container\offline-bundle\fastembed-cache"
+    $cacheDst = Join-Path $ProjectRoot "fastembed-cache"
+
+    # Copy cache only if missing or -UpdateCache flag is set
+    $needCopy = $UpdateCache -or -not (Test-Path $cacheDst)
+    if ($needCopy) {
+        if (Test-Path $cacheSrc) {
+            Write-Host "[*] Copying fastembed cache for offline build..." -ForegroundColor Yellow
+            Remove-Item -Path $cacheDst -Recurse -Force -ErrorAction SilentlyContinue
+            Copy-Item -Path $cacheSrc -Destination $cacheDst -Recurse
+        } else {
+            Write-Host "[!] fastembed cache not found at $cacheSrc" -ForegroundColor Red
+            Write-Host "    Run .\assistant-container\prepare-offline-bundle.ps1 first" -ForegroundColor Yellow
+            exit 1
+        }
+    } else {
+        Write-Host "[*] Using existing fastembed cache (add -UpdateCache to refresh)" -ForegroundColor Gray
+    }
+
+    $dockerArgs = @("build", "--build-context", "fastembed-cache=${cacheDst}")
+#     if ($Build) { $dockerArgs += "--no-cache" }
+    $dockerArgs += @("-t", "${image}:${version}", "-f", "$ProjectRoot\Dockerfile", "$ProjectRoot")
     Write-Host "=== Building ${image}:${version} ===" -ForegroundColor Cyan
-    docker build @cache -t "${image}:${version}" -f "$ProjectRoot\Dockerfile" "$ProjectRoot"
+    docker @dockerArgs
     if ($LASTEXITCODE -ne 0) {
         Write-Host "[!] Build failed" -ForegroundColor Red
         exit $LASTEXITCODE

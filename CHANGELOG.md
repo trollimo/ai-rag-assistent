@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.7.0 (2026-06-30) — rag-generation
+
+### Changed
+- `chunking.py`: merge threshold 300 → 800 — мелкие секции склеиваются в более крупные чанки
+
+## 1.4.0 (2026-06-30) — assistant-container
+
+### Changed
+- `mcp-tools.yaml`: search default_top_k 3 → 5 — увеличен объём контекста для LLM
+- `main.py`: каждый чанк обёрнут в `[source: имя-файла]\n{текст}` перед отправкой LLM
+- `prompts.py`: добавлена инструкция не смешивать источники (без хардкода языков)
+- `docker-compose.yml`: добавлен закомментированный volume для `prompts.py` (отладка без пересборки)
+
 ## 1.6.0 (2026-06-29)
 
 ### Added

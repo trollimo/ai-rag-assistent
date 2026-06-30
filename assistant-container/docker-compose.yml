@@ -4,6 +4,13 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.offline
+      additional_contexts:
+        - wheels=./offline-bundle/wheels
+        - fastembed-cache=./offline-bundle/fastembed-cache
+        - gguf-model=./offline-bundle/models
+        - next-standalone=./offline-bundle/next-standalone
+        - next-public=./offline-bundle/next-public
+        - next-static=./offline-bundle/next-static
     container_name: rag-offline
     ports:
       - "3000:3000"
@@ -12,10 +19,11 @@ services:
       - "9080:9080"
     volumes:
       - ../rag-generation/output/chroma_db:/data/chroma_db
+      # - ./backend/rag/prompts.py:/app/backend/rag/prompts.py  # раскомментировать для отладки промпта без пересборки
     environment:
       - RAG_DB_PATH=/data/chroma_db
       - LLAMA_HOST=http://localhost:9080
       - LLAMA_MODEL=qwen2.5
-      - LOG_LEVEL=INFO
+      - LOG_LEVEL=DEBUG
       - NEXT_PUBLIC_FASTAPI_URL=http://localhost:8000
     restart: unless-stopped

@@ -29,7 +29,7 @@ def _split_by_chars(text: str, max_chars: int, overlap: int) -> list:
     return parts
 
 
-def _merge_small_chunks(chunks: list, min_chars: int = 300) -> list:
+def _merge_small_chunks(chunks: list, min_chars: int = 800) -> list:
     merged = []
     buf = ''
     for chunk in chunks:

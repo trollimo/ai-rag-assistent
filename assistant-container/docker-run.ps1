@@ -10,7 +10,23 @@ $ComposeFile = Join-Path (Split-Path -Parent $MyInvocation.MyCommand.Path) "dock
 
 if ($Stop)    { docker compose -f $ComposeFile down; exit }
 if ($Restart) { docker compose -f $ComposeFile restart; exit }
-if ($Build)   { docker compose -f $ComposeFile build --no-cache }
+
+if ($Build) {
+    Write-Host "=== Building RAG Assistant Docker Image ===" -ForegroundColor Cyan
+    Write-Host ""
+    Write-Host "This will download ~6 GB of base images and models." -ForegroundColor Yellow
+    Write-Host "Estimated time: 30-120 minutes depending on connection." -ForegroundColor Yellow
+    Write-Host ""
+    $start = Get-Date
+    docker compose -f $ComposeFile build --no-cache
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host "[!] Build failed (exit code $LASTEXITCODE)" -ForegroundColor Red
+        exit $LASTEXITCODE
+    }
+    $elapsed = [math]::Round(((Get-Date) - $start).TotalMinutes, 1)
+    Write-Host "[v] Build complete in ${elapsed}min!" -ForegroundColor Green
+    Write-Host ""
+}
 
 docker compose -f $ComposeFile up -d
 
