@@ -15,7 +15,15 @@ class Retriever:
             name=settings.COLLECTION_NAME,
             embedding_function=embedding_func,
         )
-        logger.info("Retriever ready db=%s collection=%s", settings.RAG_DB_PATH, settings.COLLECTION_NAME)
+        count = self.collection.count()
+        if count:
+            data = self.collection.get(limit=count, include=["metadatas"])
+            topics = len(set(m["source"] for m in data["metadatas"]))
+            logger.info("Retriever ready db=%s collection=%s — %d chunks, %d topics",
+                         settings.RAG_DB_PATH, settings.COLLECTION_NAME, count, topics)
+        else:
+            logger.info("Retriever ready db=%s collection=%s — empty",
+                         settings.RAG_DB_PATH, settings.COLLECTION_NAME)
 
     def search(self, query: str, top_k: int = 5, source_filter: str | None = None, path_filter: str | None = None):
         logger.debug("RAG search query=%s top_k=%d source_filter=%s path_filter=%s", query, top_k, source_filter, path_filter)

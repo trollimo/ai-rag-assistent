@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.6.1 (2026-07-01) — assistant-container
+
+### Added
+- `retriever.py`: при старте выводится количество чанков и тем в БД
+
 ## 1.6.0 (2026-07-01) — assistant-container
 
 ### Added
