@@ -47,7 +47,8 @@
 |--------|-----|
 | Web UI    | http://localhost:3000 |
 | API       | http://localhost:8000 |
-| MCP SSE   | http://localhost:9081/sse |
+| MCP (Streamable HTTP) | http://localhost:9081/mcp |
+| MCP SSE (альтернатива) | http://localhost:9081/sse |
 | LLM API   | http://localhost:9080 |
 
 ## Структура
@@ -64,6 +65,21 @@ VERSION
 
 Для подключения opencode к MCP-серверу создай в корне проекта `.opencode.json`:
 
+### Streamable HTTP (рекомендуется)
+
+```json
+{
+  "mcp_servers": {
+    "knowledge": {
+      "type": "remote",
+      "url": "http://localhost:9081/mcp"
+    }
+  }
+}
+```
+
+### SSE (альтернатива)
+
 ```json
 {
   "mcp_servers": {
@@ -75,6 +91,6 @@ VERSION
 }
 ```
 
-После этого opencode получит инструмент `search_docs` — поиск по RAG-базе.
-Описание инструмента (docstring, по которому LLM решает вызывать его) задаётся в файле `backend/config/mcp-tools.yaml`. Можешь отредактировать его под свои источники знаний — правки применяются после перезапуска контейнера.
+После этого opencode получит инструменты `search_docs` и `list_topics` — поиск по RAG-базе и список тем.
+Описание инструментов (docstring, по которому LLM решает вызывать их) задаётся в файле `backend/config/mcp-tools.yaml`. Можешь отредактировать его под свои источники знаний — правки применяются после перезапуска контейнера.
 ```

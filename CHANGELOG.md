@@ -1,5 +1,20 @@
 # Changelog
 
+## 1.6.0 (2026-07-01) — assistant-container
+
+### Added
+- MCP: Streamable HTTP (`/mcp`) — основной транспорт, замена stdio
+- MCP: SSE (`/sse`) — обратная совместимость
+- `mcp>=1.9.1` в requirements (streamable_http_app + auto root_path)
+- Volumes для дебага (`./backend`, `./entrypoint.sh`) в docker-compose.yml
+- Закомментированный volume для `mcp-tools.yaml`
+
+### Changed
+- `server.py`: единое Starlette-приложение с двумя роутами `/mcp` + `/sse` на порту 9081
+- `entrypoint.sh`: запуск MCP без аргументов (оба транспорта сразу)
+- README, AGENTS.md: документация под новый протокол
+- `docker-compose.yml`: подписаны порты
+
 ## 1.9.0 (2026-06-30) — rag-generation
 
 ### Added

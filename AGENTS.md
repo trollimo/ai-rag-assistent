@@ -55,12 +55,32 @@
 | Backend API | FastAPI (port 8000) |
 | Frontend | Next.js + TailwindCSS (port 3000) |
 | LLM Runtime | llama-server (port 9080) + qwen2.5-1.5b-instruct Q4_K_M (llama.cpp) |
-| MCP | FastMCP (stdio transport, отдельный процесс) |
+| MCP | FastMCP (Streamable HTTP + SSE на порту 9081) |
 | Контейнеры | Docker + docker-compose (один контейнер) |
 
 ## 🔌 Opencode MCP
 
-Для подключения opencode к RAG через MCP-сервер создай в корне `.opencode.json`:
+MCP-сервер доступен на порту **9081** через два эндпоинта:
+
+| Эндпоинт | Транспорт | Назначение |
+|----------|-----------|------------|
+| `/mcp` | Streamable HTTP | **основной** (рекомендуется), MCP SDK |
+| `/sse` | SSE | обратная совместимость |
+
+### Streamable HTTP (рекомендуется)
+
+```json
+{
+  "mcp_servers": {
+    "knowledge": {
+      "type": "remote",
+      "url": "http://localhost:9081/mcp"
+    }
+  }
+}
+```
+
+### SSE (альтернатива)
 
 ```json
 {
@@ -73,7 +93,7 @@
 }
 ```
 
-Инструмент `search_docs` — поиск релевантных чанков в ChromaDB.
+Инструменты: `search_docs`, `list_topics`.
 Описание (docstring) задаётся в `assistant-container/backend/config/mcp-tools.yaml` — его видит LLM и решает, когда вызывать инструмент.
 
 ## 🔗 Ссылки
@@ -91,7 +111,7 @@
 - [x] Dockerfile (offline) — multi-stage: llama-server + python:3.11-slim + node (собран, 1.19 GB)
 - [x] Dockerfile (online) — multi-stage: llama-server + python:3.11-slim + node, модель качается с HuggingFace
 - [x] prepare-offline-bundle.ps1 — скачивает бандл для офлайна
-- [x] MCP server (stdio + HTTP SSE)
+- [x] MCP server (Streamable HTTP `/mcp` + SSE `/sse` на порту 9081)
 - [x] Web UI (Next.js чат)
 - [x] backend/core/settings.py — заменить OLLAMA_HOST на LLAMA_HOST
 - [x] backend/api/main.py — заменить Ollama API на OpenAI-формат llama-server

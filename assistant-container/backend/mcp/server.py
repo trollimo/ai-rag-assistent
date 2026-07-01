@@ -1,9 +1,11 @@
+import contextlib
 import logging
 from pathlib import Path
 
 import httpx
 import yaml
 from mcp.server.fastmcp import FastMCP
+from starlette.applications import Starlette
 from backend.core.logging_config import setup_logging
 
 setup_logging()
@@ -64,11 +66,22 @@ def list_topics(filter: str = "", top_k: int | None = None):
         return {"error": str(e)}
 
 
+mcp.settings.message_path = '/sse/messages/'
+
+streamable_app = mcp.streamable_http_app()
+sse_app = mcp.sse_app()
+
+
+@contextlib.asynccontextmanager
+async def combined_lifespan(app):
+    async with contextlib.AsyncExitStack() as stack:
+        await stack.enter_async_context(mcp._session_manager.run())
+        yield
+
+
+app = Starlette(routes=[*streamable_app.routes, *sse_app.routes], lifespan=combined_lifespan)
+
 if __name__ == "__main__":
-    import sys, uvicorn
-    transport = sys.argv[1] if len(sys.argv) > 1 else "stdio"
-    logger.info("MCP server starting transport=%s", transport)
-    if transport == "sse":
-        uvicorn.run(mcp.sse_app(), host="0.0.0.0", port=9081)
-    else:
-        mcp.run(transport="stdio")
+    import uvicorn
+    logger.info("MCP server: /mcp (streamable-http) + /sse (SSE) on port 9081")
+    uvicorn.run(app, host="0.0.0.0", port=9081)

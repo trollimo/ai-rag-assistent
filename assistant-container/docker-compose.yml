@@ -13,13 +13,15 @@ services:
         - next-static=./offline-bundle/next-static
     container_name: rag-offline
     ports:
-      - "3000:3000"
-      - "8000:8000"
-      - "9081:9081"
-      - "9080:9080"
+      - "3000:3000"   # Next.js Web UI
+      - "8000:8000"   # FastAPI REST API (chat, search, topics)
+      - "9081:9081"   # MCP server (Streamable HTTP /mcp + SSE /sse)
+      - "9080:9080"   # llama-server LLM inference
     volumes:
       - ../rag-generation/output/chroma_db:/data/chroma_db
-      # - ./backend/rag/prompts.py:/app/backend/rag/prompts.py  # раскомментировать для отладки промпта без пересборки
+      # - ./backend:/app/backend
+      # - ./entrypoint.sh:/app/entrypoint.sh
+      # - ./backend/config/mcp-tools.yaml:/app/backend/config/mcp-tools.yaml  # раскомментировать для правки описания инструментов без пересборки
     environment:
       - RAG_DB_PATH=/data/chroma_db
       - LLAMA_HOST=http://localhost:9080

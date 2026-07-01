@@ -1,11 +1,14 @@
+# ── LLM (llama-server) ────────────────────────────────────────────
 llm:
-  ctx_size: 8192
-  max_tokens: 4096
+  ctx_size: 8192       # контекстное окно модели (токенов). Один токен ~4 символа
+  max_tokens: 4096     # макс. токенов в ответе LLM
 
+# ── Чат (REST /chat) ──────────────────────────────────────────────
 chat:
-  show_sources: true
-  sources_separator: "\n\n---\n**Источники:** "
+  show_sources: true                  # добавлять список источников в ответ
+  sources_separator: "\n\n---\n**Источники:** "  # разделитель ответ/источники
 
+# ── MCP-инструменты (видит LLM-агент) ─────────────────────────────
 tools:
   search_docs:
     description: >
@@ -19,9 +22,11 @@ tools:
       Use this to understand what documentation is indexed, or to
       check if a specific topic (e.g. "Nexus") is present in the RAG.
 
+# ── Поиск (REST /search, MCP search_docs) ─────────────────────────
 search:
-  default_top_k: 5
+  default_top_k: 5    # сколько чанков возвращать по умолчанию
 
+# ── Темы (REST /topics, MCP list_topics) ──────────────────────────
 topics:
-  default_top_k: 100
-  max_topics: 500
+  default_top_k: 100  # сколько тем возвращать по умолчанию
+  max_topics: 500     # макс. количество тем в одном ответе
