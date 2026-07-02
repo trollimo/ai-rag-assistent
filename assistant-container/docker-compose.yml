@@ -20,12 +20,14 @@ services:
     volumes:
       - ../rag-generation/output/chroma_db:/data/chroma_db
       # - ./backend:/app/backend
-      # - ./entrypoint.sh:/app/entrypoint.sh
+      - ./entrypoint.sh:/app/entrypoint.sh
       # - ./backend/config/mcp-tools.yaml:/app/backend/config/mcp-tools.yaml  # раскомментировать для правки описания инструментов без пересборки
     environment:
       - RAG_DB_PATH=/data/chroma_db
       - LLAMA_HOST=http://localhost:9080
       - LLAMA_MODEL=qwen2.5
       - LOG_LEVEL=DEBUG
+      - MCP_SERVER_URL=http://localhost:9081/mcp
+      # - MCP_SERVER_URL=http://mcp-service.rag-namespace.svc.cluster.local:9081/mcp  # для Kubernetes
       - NEXT_PUBLIC_FASTAPI_URL=http://localhost:8000
     restart: unless-stopped
