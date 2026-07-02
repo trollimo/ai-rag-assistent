@@ -8,7 +8,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from backend.rag.retriever import Retriever
-from backend.rag.prompts import RAG_PROMPT_TEMPLATE
+from backend.rag.prompts import SYSTEM_PROMPT, RAG_PROMPT_TEMPLATE
 from backend.core import settings
 from backend.core.logging_config import setup_logging
 
@@ -122,11 +122,15 @@ async def chat(req: ChatRequest):
         else:
             matches = first_pass
 
-    context = "\n\n".join([f"[source: {Path(m['source']).stem}]\n{m['text']}" for m in matches])
+    context = "\n\n".join([m['text'] for m in matches])
     logger.debug("RAG context=%s", context)
 
-    prompt = RAG_PROMPT_TEMPLATE.format(context=context, question=req.question)
-    answer = await _ask_llama(prompt)
+    user_prompt = RAG_PROMPT_TEMPLATE.format(context=context, question=req.question)
+    messages = [
+        {"role": "system", "content": SYSTEM_PROMPT},
+        {"role": "user", "content": user_prompt},
+    ]
+    answer = await _ask_llama(messages)
 
     if settings.CHAT_SHOW_SOURCES and matches:
         source_names = sorted(set(Path(m["source"]).stem for m in matches))
@@ -140,15 +144,14 @@ async def chat(req: ChatRequest):
     )
 
 
-async def _ask_llama(prompt: str) -> str:
-    logger.debug("LLM ask prompt=%s", prompt)
+async def _ask_llama(messages: list) -> str:
+    logger.debug("LLM messages=%s", messages)
     body = {
         "model": settings.LLAMA_MODEL,
-        "messages": [{"role": "user", "content": prompt}],
+        "messages": messages,
         "max_tokens": settings.LLM_MAX_TOKENS,
         "stream": False,
     }
-    logger.debug("LLM request body=%s", body)
     try:
         async with httpx.AsyncClient(timeout=120) as client:
             resp = await client.post(
