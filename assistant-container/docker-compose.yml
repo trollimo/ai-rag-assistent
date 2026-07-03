@@ -1,0 +1,33 @@
+services:
+  assistant:
+    image: rag-offline
+    build:
+      context: .
+      dockerfile: Dockerfile.offline
+      additional_contexts:
+        - wheels=./offline-bundle/wheels
+        - fastembed-cache=./offline-bundle/fastembed-cache
+        - gguf-model=./offline-bundle/models
+        - next-standalone=./offline-bundle/next-standalone
+        - next-public=./offline-bundle/next-public
+        - next-static=./offline-bundle/next-static
+    container_name: rag-offline
+    ports:
+      - "3000:3000"   # Next.js Web UI
+      - "8000:8000"   # FastAPI REST API (chat, search, topics)
+      - "9081:9081"   # MCP server (Streamable HTTP /mcp + SSE /sse)
+      - "9080:9080"   # llama-server LLM inference
+    volumes:
+      - ../rag-generation/output/chroma_db:/data/chroma_db
+      # - ./backend:/app/backend
+      - ./entrypoint.sh:/app/entrypoint.sh
+      # - ./backend/config/mcp-tools.yaml:/app/backend/config/mcp-tools.yaml  # раскомментировать для правки описания инструментов без пересборки
+    environment:
+      - RAG_DB_PATH=/data/chroma_db
+      - LLAMA_HOST=http://localhost:9080
+      - LLAMA_MODEL=qwen2.5
+      - LOG_LEVEL=DEBUG
+      - MCP_SERVER_URL=http://localhost:9081/mcp
+      # - MCP_SERVER_URL=http://mcp-service.rag-namespace.svc.cluster.local:9081/mcp  # для Kubernetes
+      - NEXT_PUBLIC_FASTAPI_URL=http://localhost:8000
+    restart: unless-stopped

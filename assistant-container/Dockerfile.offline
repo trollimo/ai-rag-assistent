@@ -1,0 +1,59 @@
+# ── Stage 1: llama-server dist ──────────────────────────────────
+FROM python:3.11-slim AS llama-source
+RUN apt-get update && apt-get install -y curl ca-certificates && rm -rf /var/lib/apt/lists/* && \
+    curl -fsSL "https://github.com/ggml-org/llama.cpp/releases/download/b9804/llama-b9804-bin-ubuntu-x64.tar.gz" -o /tmp/llama.tar.gz && \
+    tar -xzf /tmp/llama.tar.gz -C /opt/ && \
+    rm /tmp/llama.tar.gz
+
+# ── Stage 2: Node binary ────────────────────────────────────────
+FROM node:20-slim AS node-source
+
+# ── Stage 3: Final image ────────────────────────────────────────
+FROM python:3.11-slim
+
+# Base system deps (zstd for bundle, libgomp for llama-server OpenMP)
+RUN apt-get update && apt-get install -y zstd libgomp1 && rm -rf /var/lib/apt/lists/*
+
+# Node binary (stable)
+COPY --from=node-source /usr/local/bin/node /usr/local/bin/node
+
+# ── Python deps (cached: only invalidated when requirements.txt changes) ──
+WORKDIR /app
+COPY backend/requirements.txt /app/backend/requirements.txt
+COPY --from=wheels . /tmp/wheels
+RUN --mount=type=cache,target=/root/.cache/pip \
+    pip install --find-links=/tmp/wheels -r /app/backend/requirements.txt
+
+# Fastembed cache (stable)
+COPY --from=fastembed-cache . /root/.cache/fastembed
+ENV FASTEMBED_CACHE_PATH=/root/.cache/fastembed
+ENV HF_HUB_OFFLINE=1
+
+# ── llama-server + GGUF model ───────────────────────────────────
+# Full dist copied so CPU backends (.so plugins) are found at runtime
+COPY --from=llama-source /opt/llama-b9804 /opt/llama
+RUN ln -sf /opt/llama/llama-server /usr/local/bin/llama-server
+ENV LD_LIBRARY_PATH=/opt/llama
+
+COPY --from=gguf-model ./Qwen2.5-1.5B-Instruct-Q4_K_M.gguf /models/qwen2.5.gguf
+
+# ── Application code ────────────────────────────────────────────
+COPY backend /app/backend
+
+WORKDIR /app/web
+COPY --from=next-standalone . ./
+COPY --from=next-public . ./public
+COPY --from=next-static . ./.next/static
+
+COPY entrypoint.sh /app/entrypoint.sh
+RUN chmod +x /app/entrypoint.sh
+
+WORKDIR /app
+
+ENV LLAMA_HOST=http://localhost:9080
+ENV LLAMA_MODEL=qwen2.5
+ENV NODE_ENV=production
+
+EXPOSE 9080 8000 9081 3000
+
+CMD ["/app/entrypoint.sh"]
