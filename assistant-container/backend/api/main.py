@@ -167,7 +167,7 @@ async def _ask_llama(messages: list) -> str:
     try:
         async with httpx.AsyncClient(timeout=120) as client:
             resp = await client.post(
-                f"{settings.LLM_BASE_URL}/v1/chat/completions",
+                f"{settings.LLM_BASE_URL.rstrip('/')}/v1/chat/completions",
                 json=body,
                 headers=headers,
             )

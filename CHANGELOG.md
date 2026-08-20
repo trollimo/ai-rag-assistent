@@ -1,5 +1,96 @@
 # Changelog
 
+## 1.8.1 (2026-08-21) — assistant-container
+
+### Fixed
+- `retriever.py`: single-topic follow-up search used `where["source"] = {"$contains": path_filter}`
+  — `$contains` filters document text (`where_document`), not metadata (`where`); on metadata it
+  silently matched nothing. Every question where `_detect_source()` found a dominant topic (e.g.
+  "Расскажи про deployment", the related-topics buttons) got zero results regardless of relevance.
+  `path_filter` is always an exact source path already, so exact match (`where["source"] = path_filter`)
+  is both the fix and the semantically correct behavior — never needed substring matching.
+
+## 1.8.0 (2026-08-21) — assistant-container
+
+### Added
+- `retriever.py` / `mcp-tools.yaml`: `search.max_distance` cutoff — chromadb results past this l2
+  distance are dropped instead of always returning `top_k` regardless of relevance. Found via a
+  real case: a question about code review pulled in an unrelated Kubernetes Service troubleshooting
+  chunk because on this small, topically mixed corpus the model doesn't separate "relevant" from
+  "irrelevant" by a wide margin (irrelevant chunks landed within ~1 distance unit of relevant ones).
+  Threshold (300) is corpus/model-specific — see `rag-generation/docs/embedding-model-research.md`.
+
+## 1.7.3 (2026-08-20) — assistant-container
+
+### Fixed
+- `offline-bundle/next-standalone`: the bundle refresh after the 1.7.0 UI rewrite silently kept
+  serving the old single-column chat UI. Cause: `rm -rf next-standalone/*` and `cp -r .../standalone/*
+  ...` — bash glob `*` does not match dotfiles, so the hidden `.next/` directory (where Next.js
+  standalone actually puts the compiled server-side pages) was never cleared or replaced. Same class
+  of bug is possible in `prepare-offline-bundle.ps1` if it's ever run with a stale bundle already
+  present — PowerShell's `Copy-Item -Path "x\*"` does not have this specific glob gap, but the
+  script's own "skip if `$nextSize -gt 1MB`" staleness check means it never rebuilds automatically
+  once *any* content exists there, stale or not.
+
+## 1.7.1 (2026-08-20) — assistant-container
+
+### Fixed
+- `requirements.txt`: pin `mcp<2.0.0`. `offline-bundle/wheels` doesn't cover every transitive
+  dependency, so this build's `pip install` partly reached PyPI and landed on `mcp` 2.0.0, which
+  renamed `mcp.server.fastmcp` -> `mcp.server.mcpserver`. `backend/mcp/server.py` targets the 1.x
+  API, so the MCP process crashed on import; `entrypoint.sh`'s `wait -n` then took the whole
+  container down with it, producing a `restart: unless-stopped` crash-loop.
+
+### Changed
+- `prompts.py`: system prompt now explicitly requires answering in Russian regardless of question language.
+
+## 1.7.0 (2026-08-20) — assistant-container
+
+### Added
+- `Dockerfile.llm` / `docker-compose.yml`: llama-server + GGUF split out of the assistant image into
+  its own `llm` service — swappable for a corporate OpenAI-compatible endpoint without touching the
+  rest of the stack. Along the way: found and fixed a real llama.cpp bug where
+  `ggml_backend_load_all()` fails with "no backends are loaded" if the process's cwd is `/`,
+  regardless of how the binary itself is invoked — fixed with an explicit non-root `WORKDIR`.
+- `settings.py`: `LLM_BASE_URL` / `LLM_API_KEY` / `LLM_MODEL_NAME` — generalized OpenAI-compatible
+  connector, local `llm` service or external endpoint are interchangeable. `LLAMA_HOST`/`LLAMA_MODEL`
+  kept as deprecated aliases.
+- `web/components/Workspace.tsx` + `ChatSidebar.tsx` + `AnswerPanel.tsx`: two-column UI (chat history
+  left, presentation panel right: question -> answer -> sources -> related topics), replacing the
+  single-column chat-bubble layout. `/chat` now returns `related_topics`.
+- `Dockerfile.offline`: no longer fetches `node:20-slim` or llama.cpp from GitHub at build time —
+  both come from an already-built donor image, with `fetch-llama-dist.ps1` as a from-scratch fallback.
+
+### Known gaps
+- `offline-bundle/wheels` is incomplete (see 1.7.1) — build isn't fully offline yet.
+- `@tailwindcss/typography` is listed in `package.json` but not installed (registry was unreachable
+  mid-session) — `answer-markdown` CSS in `globals.css` is the fallback until it's installed.
+
+## 1.10.0 (2026-08-21) — rag-generation
+
+### Added
+- `ingest.py` / `chunking.py`: incremental indexing — chunk hashes recorded in `manifest.json`, only
+  changed/new chunks are re-embedded, removed ones are deleted from the collection. A build
+  fingerprint (model/chunk_size/overlap/prefixes) forces a full reindex when any of them change, so
+  stored vectors never get silently compared across incompatible settings. On the ~15-minute,
+  630-chunk slow-indexing case from `CLAUDE.md`: a single-file edit now re-embeds in ~2s.
+- `embedding_fn.py`: optional `RAG_EMBED_E5_PREFIXES` (`query:`/`passage:`) — off by default, measured
+  slightly worse on the corpus size tested (hit@1 18/20 -> 17/20 over 20 Russian queries).
+- `docs/kubernetes/*`, `docs/security/*`: real reference docs (Kubernetes Deployment/Service/Ingress/
+  Helm/ConfigMap/StatefulSet/HPA; OWASP Top 10, injection/XSS, access control, dependency scanning,
+  Docker image hardening, prompt injection) — indexed into the real knowledge base, not a synthetic
+  test fixture.
+- `docs/embedding-model-research.md`: why `multilingual-e5-large` fp32 stays the embedding model —
+  a lighter model (MiniLM) and int8 quantization of the same model were both tested and rejected
+  (int8's expected 2.7-3.4x speedup needs AVX512-VNNI the test CPU doesn't have; got +15% with a
+  real quality regression instead).
+
+### Fixed
+- Root cause of the slow-indexing bug in `CLAUDE.md`: not Ollama (unused), not missing batching
+  (already batched), not missing threads (ONNXRuntime already saturates all cores) — 99% of the time
+  is the `multilingual-e5-large` inference itself, the heaviest model in fastembed's catalog, on a
+  CPU without AVX512-VNNI. Chroma write time is <1% of total.
+
 ## 1.6.1 (2026-07-01) — assistant-container
 
 ### Added

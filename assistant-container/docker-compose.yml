@@ -26,7 +26,7 @@ services:
     restart: unless-stopped
 
   assistant:
-    image: rag-offline:1.7.1
+    image: rag-offline:1.8.0
     build:
       context: .
       dockerfile: Dockerfile.offline
@@ -51,11 +51,11 @@ services:
       # ── LLM connector ────────────────────────────────────────────
       # Local llm service by default. For a corporate model, point
       # LLM_BASE_URL at it and supply the key — the API shape is the same.
-      - LLM_BASE_URL=http://llm:9080
-      - LLM_MODEL_NAME=qwen2.5
-      # - LLM_BASE_URL=https://llm.internal.company/v1-compatible
-      # - LLM_API_KEY=${LLM_API_KEY}
-      # - LLM_MODEL_NAME=internal-chat-model
+      #- LLM_BASE_URL=http://llm:9080
+      #- LLM_MODEL_NAME=qwen2.5
+      - LLM_BASE_URL=https://api.neuraldeep.ru/
+      - LLM_API_KEY=${LLM_API_KEY}
+      - LLM_MODEL_NAME=${LLM_MODEL_NAME}
       # ── Embedding prefixes ───────────────────────────────────────
       # Must match what rag-generation used when building the database.
       # - RAG_EMBED_E5_PREFIXES=1

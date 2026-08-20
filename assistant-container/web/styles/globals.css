@@ -44,3 +44,8 @@ body {
   padding: 0;
   color: inherit;
 }
+.answer-markdown img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 0.5em;
+}

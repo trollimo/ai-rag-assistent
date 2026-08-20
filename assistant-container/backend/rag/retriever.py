@@ -31,7 +31,13 @@ class Retriever:
         if source_filter:
             where["source_name"] = source_filter
         if path_filter:
-            where["source"] = {"$contains": path_filter}
+            # Exact match: path_filter is always a full source path handed
+            # back by _detect_source(), never a partial string. "$contains"
+            # here was wrong -- chromadb's $contains applies to document
+            # text (where_document), not metadata (where), so it silently
+            # matched nothing and every dominant-source follow-up query
+            # returned zero results regardless of max_distance.
+            where["source"] = path_filter
         if not where:
             where_clause = None
         else:
@@ -43,11 +49,15 @@ class Retriever:
             query_embeddings=[query_vec], n_results=top_k, where=where_clause
         )
         matches = []
+        dropped = []
         for doc, meta, dist in zip(
             result["documents"][0],
             result["metadatas"][0],
             result["distances"][0],
         ):
+            if settings.MAX_DISTANCE is not None and dist > settings.MAX_DISTANCE:
+                dropped.append((meta["source"], dist))
+                continue
             matches.append({
                 "text": doc,
                 "source": meta["source"],
@@ -55,6 +65,9 @@ class Retriever:
                 "distance": dist,
             })
 
+        if dropped:
+            logger.debug("RAG search dropped %d results past max_distance=%s: %s",
+                         len(dropped), settings.MAX_DISTANCE, dropped)
         logger.debug("RAG search result count=%d sources=%s",
                      len(matches), [m["source"] for m in matches])
         return matches

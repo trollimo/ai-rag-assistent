@@ -28,6 +28,7 @@ LLAMA_MODEL = LLM_MODEL_NAME
 LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
 
 DEFAULT_TOP_K = _cfg.get("search", {}).get("default_top_k", 3)
+MAX_DISTANCE = _cfg.get("search", {}).get("max_distance")
 TOPICS_DEFAULT_TOP_K = _cfg.get("topics", {}).get("default_top_k", 100)
 TOPICS_MAX = _cfg.get("topics", {}).get("max_topics", 500)
 
