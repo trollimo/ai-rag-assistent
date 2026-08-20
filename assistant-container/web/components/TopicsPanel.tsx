@@ -60,9 +60,9 @@ export default function TopicsPanel() {
   };
 
   return (
-    <div className="mt-4 bg-white rounded-lg shadow">
+    <div className="bg-white">
       <button
-        className="w-full flex items-center justify-between px-4 py-3 text-left font-medium text-gray-700 hover:bg-gray-50 rounded-lg"
+        className="w-full flex items-center justify-between px-4 py-3 text-left text-sm font-medium text-gray-600 hover:bg-gray-50"
         onClick={toggle}
       >
         <span>📋 Просмотр тем из RAG</span>

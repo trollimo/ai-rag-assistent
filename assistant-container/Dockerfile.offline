@@ -1,18 +1,19 @@
-# ── Stage 1: llama-server dist ──────────────────────────────────
-FROM python:3.11-slim AS llama-source
-RUN apt-get update && apt-get install -y curl ca-certificates && rm -rf /var/lib/apt/lists/* && \
-    curl -fsSL "https://github.com/ggml-org/llama.cpp/releases/download/b9804/llama-b9804-bin-ubuntu-x64.tar.gz" -o /tmp/llama.tar.gz && \
-    tar -xzf /tmp/llama.tar.gz -C /opt/ && \
-    rm /tmp/llama.tar.gz
+# ── Stage 1: Node binary ────────────────────────────────────────
+# Pulled from an already-built image instead of node:20-slim — one fewer base
+# image to fetch/vendor for the closed network. Point ASSETS_SOURCE_IMAGE at
+# any image with a working /usr/local/bin/node (any prior build of this same
+# Dockerfile qualifies). No such image on a truly first build?
+# --build-arg ASSETS_SOURCE_IMAGE=node:20-slim falls back to the network pull.
+ARG ASSETS_SOURCE_IMAGE=rag-assistant-offline:latest
+FROM ${ASSETS_SOURCE_IMAGE} AS node-source
 
-# ── Stage 2: Node binary ────────────────────────────────────────
-FROM node:20-slim AS node-source
-
-# ── Stage 3: Final image ────────────────────────────────────────
+# ── Stage 2: Final image ────────────────────────────────────────
+# Retrieval + API + MCP + Web UI. The LLM lives in its own image
+# (Dockerfile.llm) so it can be replaced by a corporate endpoint.
 FROM python:3.11-slim
 
-# Base system deps (zstd for bundle, libgomp for llama-server OpenMP)
-RUN apt-get update && apt-get install -y zstd libgomp1 && rm -rf /var/lib/apt/lists/*
+# zstd for the offline bundle
+RUN apt-get update && apt-get install -y zstd && rm -rf /var/lib/apt/lists/*
 
 # Node binary (stable)
 COPY --from=node-source /usr/local/bin/node /usr/local/bin/node
@@ -29,13 +30,12 @@ COPY --from=fastembed-cache . /root/.cache/fastembed
 ENV FASTEMBED_CACHE_PATH=/root/.cache/fastembed
 ENV HF_HUB_OFFLINE=1
 
-# ── llama-server + GGUF model ───────────────────────────────────
-# Full dist copied so CPU backends (.so plugins) are found at runtime
-COPY --from=llama-source /opt/llama-b9804 /opt/llama
-RUN ln -sf /opt/llama/llama-server /usr/local/bin/llama-server
-ENV LD_LIBRARY_PATH=/opt/llama
-
-COPY --from=gguf-model ./Qwen2.5-1.5B-Instruct-Q4_K_M.gguf /models/qwen2.5.gguf
+# ── e5 query:/passage: prefixes ──────────────────────────────────
+# Must match the value used by rag-generation when the database was built:
+# documents indexed with "passage: " are only searchable by queries embedded
+# with "query: ". A mismatch silently degrades results - nothing errors out.
+# Off by default (measured slightly worse on the small starting corpus).
+# ENV RAG_EMBED_E5_PREFIXES=1
 
 # ── Application code ────────────────────────────────────────────
 COPY backend /app/backend
@@ -50,10 +50,12 @@ RUN chmod +x /app/entrypoint.sh
 
 WORKDIR /app
 
-ENV LLAMA_HOST=http://localhost:9080
-ENV LLAMA_MODEL=qwen2.5
+# LLM connector defaults — override to point at the sibling llm service or a
+# corporate endpoint (see docker-compose.yml).
+ENV LLM_BASE_URL=http://llm:9080
+ENV LLM_MODEL_NAME=qwen2.5
 ENV NODE_ENV=production
 
-EXPOSE 9080 8000 9081 3000
+EXPOSE 8000 9081 3000
 
 CMD ["/app/entrypoint.sh"]

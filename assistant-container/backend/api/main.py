@@ -44,6 +44,7 @@ class ChatResponse(BaseModel):
     question: str
     answer: str
     sources: list
+    related_topics: list = []
 
 
 @app.get("/")
@@ -137,26 +138,38 @@ async def chat(req: ChatRequest):
         answer += settings.CHAT_SOURCES_SEPARATOR + ", ".join(source_names)
 
     logger.info("REST /chat answer=%s", answer)
+
+    used_names = {Path(m["source"]).stem for m in matches}
+    related_topics = [
+        t for t in retriever.list_topics(top_k=settings.TOPICS_DEFAULT_TOP_K)
+        if Path(t["source"]).stem not in used_names
+    ][:4]
+
     return ChatResponse(
         question=req.question,
         answer=answer,
         sources=[{"source": m["source"], "chunk": m["chunk"]} for m in matches],
+        related_topics=related_topics,
     )
 
 
 async def _ask_llama(messages: list) -> str:
     logger.debug("LLM messages=%s", messages)
     body = {
-        "model": settings.LLAMA_MODEL,
+        "model": settings.LLM_MODEL_NAME,
         "messages": messages,
         "max_tokens": settings.LLM_MAX_TOKENS,
         "stream": False,
     }
+    headers = {}
+    if settings.LLM_API_KEY:
+        headers["Authorization"] = f"Bearer {settings.LLM_API_KEY}"
     try:
         async with httpx.AsyncClient(timeout=120) as client:
             resp = await client.post(
-                f"{settings.LLAMA_HOST}/v1/chat/completions",
+                f"{settings.LLM_BASE_URL}/v1/chat/completions",
                 json=body,
+                headers=headers,
             )
             resp.raise_for_status()
             result = resp.json()["choices"][0]["message"]["content"]

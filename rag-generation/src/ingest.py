@@ -1,4 +1,6 @@
+import hashlib
 import logging
+import os
 import time
 from pathlib import Path
 import json
@@ -22,6 +24,53 @@ def load_config():
     log.info("Loading config: %s", config_path)
     with open(config_path, "r", encoding="utf-8") as f:
         return yaml.safe_load(f)
+
+
+def chunk_hash(text):
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()[:16]
+
+
+def build_fingerprint(cfg, model_name):
+    """Settings that make previously stored vectors incomparable when changed."""
+    return {
+        "model": model_name,
+        "chunk_size": cfg["chunking"]["chunk_size"],
+        "overlap": cfg["chunking"]["overlap"],
+        "e5_prefixes": bool(os.environ.get("RAG_EMBED_E5_PREFIXES", "")),
+    }
+
+
+def load_manifest(path):
+    if not path.exists():
+        return {}
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except (json.JSONDecodeError, OSError) as e:
+        log.warning("Cannot read manifest (%s), rebuilding from scratch", e)
+        return {}
+
+
+def plan_changes(previous, current_hashes, fingerprint):
+    """Return (ids_to_embed, ids_to_delete, reason).
+
+    A changed fingerprint forces a full rebuild: vectors made with different
+    settings cannot be compared against new ones.
+    """
+    if previous.get("fingerprint") != fingerprint:
+        if previous:
+            log.info("Build settings changed -> full reindex")
+            log.info("  was: %s", previous.get("fingerprint"))
+            log.info("  now: %s", fingerprint)
+        return list(current_hashes), [], "full"
+
+    old_hashes = previous.get("hashes")
+    if not old_hashes:
+        return list(current_hashes), [], "full"
+
+    changed = [cid for cid, h in current_hashes.items() if old_hashes.get(cid) != h]
+    removed = [cid for cid in old_hashes if cid not in current_hashes]
+    return changed, removed, "incremental"
 
 
 def iter_md_files(root, patterns):
@@ -83,27 +132,52 @@ def main():
                 })
             source_names.append(source["name"])
 
-    if docs:
-        log.info("Writing %d chunks to ChromaDB ...", len(docs))
+    manifest_path = BASE_DIR / "output" / "manifest.json"
+    fingerprint = build_fingerprint(cfg, model_name)
+    hashes = {cid: chunk_hash(doc) for cid, doc in zip(ids, docs)}
+    previous = load_manifest(manifest_path)
+    to_embed, to_delete, mode = plan_changes(previous, hashes, fingerprint)
+
+    if mode == "full" and previous:
+        # Stale vectors would otherwise linger alongside the new ones
+        existing = collection.get(include=[])["ids"]
+        if existing:
+            log.info("Dropping %d existing chunks before full rebuild", len(existing))
+            collection.delete(ids=existing)
+
+    if to_delete:
+        log.info("Removing %d chunks that no longer exist in sources", len(to_delete))
+        collection.delete(ids=to_delete)
+
+    if to_embed:
+        by_id = dict(zip(ids, zip(docs, metas)))
+        sub_ids = to_embed
+        sub_docs = [by_id[i][0] for i in sub_ids]
+        sub_metas = [by_id[i][1] for i in sub_ids]
+        log.info("Writing %d of %d chunks to ChromaDB (%s) ...", len(sub_ids), len(ids), mode)
         t0 = time.perf_counter()
-        collection.upsert(ids=ids, documents=docs, metadatas=metas)
+        collection.upsert(ids=sub_ids, documents=sub_docs, metadatas=sub_metas)
         upsert_elapsed = time.perf_counter() - t0
         embed_elapsed = embedding_func.total_embed_seconds
         log.info(
             "Timing: upsert_total=%.2fs embedding=%.2fs chroma_write=%.2fs (%d chunks)",
-            upsert_elapsed, embed_elapsed, upsert_elapsed - embed_elapsed, len(docs),
+            upsert_elapsed, embed_elapsed, upsert_elapsed - embed_elapsed, len(sub_ids),
         )
+    else:
+        log.info("Nothing changed — %d chunks already up to date", len(ids))
 
     manifest = generate_manifest(
         docs, source_names,
         chunk_size=cfg["chunking"]["chunk_size"],
         overlap=cfg["chunking"]["overlap"],
+        hashes=hashes,
+        fingerprint=fingerprint,
     )
-    manifest_path = BASE_DIR / "output" / "manifest.json"
     with open(manifest_path, "w", encoding="utf-8") as f:
         json.dump(manifest, f, indent=2, ensure_ascii=False)
 
-    log.info("Done! Indexed %d chunks", len(docs))
+    log.info("Done! %d chunks indexed (%d embedded, %d removed)",
+             len(ids), len(to_embed), len(to_delete))
     log.info("Manifest: %s", manifest_path)
 
 

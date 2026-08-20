@@ -1,4 +1,30 @@
 services:
+  # Local LLM. Skip it entirely when pointing at a corporate endpoint:
+  #   docker compose up assistant       (starts only the assistant)
+  # and set LLM_BASE_URL / LLM_API_KEY / LLM_MODEL_NAME on the assistant.
+  llm:
+    image: rag-llm
+    build:
+      context: .
+      dockerfile: Dockerfile.llm
+      # Pulls the llama-server binary out of an already-built assistant image
+      # (no GitHub fetch). Build that image first, or override with a tag you
+      # have locally. Fallback if you don't: run fetch-llama-dist.ps1 once and
+      # switch Dockerfile.llm's FROM to the archive-based COPY (see its header).
+      args:
+        - LLAMA_SOURCE_IMAGE=rag-assistant-offline:latest
+      additional_contexts:
+        - gguf-model=./offline-bundle/models
+    container_name: rag-llm
+    ports:
+      - "9080:9080"   # OpenAI-compatible /v1/chat/completions
+    environment:
+      - LLM_MODEL_ALIAS=qwen2.5
+      - LLM_CTX_SIZE=2048
+      # Match the host's physical cores; unset lets llama.cpp decide
+      # - LLM_THREADS=6
+    restart: unless-stopped
+
   assistant:
     image: rag-offline
     build:
@@ -7,7 +33,6 @@ services:
       additional_contexts:
         - wheels=./offline-bundle/wheels
         - fastembed-cache=./offline-bundle/fastembed-cache
-        - gguf-model=./offline-bundle/models
         - next-standalone=./offline-bundle/next-standalone
         - next-public=./offline-bundle/next-public
         - next-static=./offline-bundle/next-static
@@ -16,7 +41,6 @@ services:
       - "3000:3000"   # Next.js Web UI
       - "8000:8000"   # FastAPI REST API (chat, search, topics)
       - "9081:9081"   # MCP server (Streamable HTTP /mcp + SSE /sse)
-      - "9080:9080"   # llama-server LLM inference
     volumes:
       - ../rag-generation/output/chroma_db:/data/chroma_db
       - ./backend:/app/backend
@@ -24,10 +48,21 @@ services:
       # - ./backend/config/mcp-tools.yaml:/app/backend/config/mcp-tools.yaml  # раскомментировать для правки описания инструментов без пересборки
     environment:
       - RAG_DB_PATH=/data/chroma_db
-      - LLAMA_HOST=http://localhost:9080
-      - LLAMA_MODEL=qwen2.5
+      # ── LLM connector ────────────────────────────────────────────
+      # Local llm service by default. For a corporate model, point
+      # LLM_BASE_URL at it and supply the key — the API shape is the same.
+      - LLM_BASE_URL=http://llm:9080
+      - LLM_MODEL_NAME=qwen2.5
+      # - LLM_BASE_URL=https://llm.internal.company/v1-compatible
+      # - LLM_API_KEY=${LLM_API_KEY}
+      # - LLM_MODEL_NAME=internal-chat-model
+      # ── Embedding prefixes ───────────────────────────────────────
+      # Must match what rag-generation used when building the database.
+      # - RAG_EMBED_E5_PREFIXES=1
       - LOG_LEVEL=DEBUG
       - MCP_SERVER_URL=http://localhost:9081/mcp
       # - MCP_SERVER_URL=http://mcp-service.rag-namespace.svc.cluster.local:9081/mcp  # для Kubernetes
       - NEXT_PUBLIC_FASTAPI_URL=http://localhost:8000
+    depends_on:
+      - llm
     restart: unless-stopped
