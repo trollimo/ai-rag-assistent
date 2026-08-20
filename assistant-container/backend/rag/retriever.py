@@ -50,12 +50,23 @@ class Retriever:
         )
         matches = []
         dropped = []
-        for doc, meta, dist in zip(
+        candidates = list(zip(
             result["documents"][0],
             result["metadatas"][0],
             result["distances"][0],
-        ):
-            if settings.MAX_DISTANCE is not None and dist > settings.MAX_DISTANCE:
+        ))
+        for rank, (doc, meta, dist) in enumerate(candidates):
+            # Rank 0 (the single closest match) is always kept, cutoff only
+            # applies from rank 1 on. A bare keyword like "Deployment" (no
+            # surrounding sentence) embeds measurably farther from its own
+            # correct doc than the same word inside a real question does --
+            # e.g. 324 vs 246 on this corpus, both past a naive fixed
+            # threshold. Every case where an irrelevant chunk actually
+            # leaked into an answer (the Kubernetes Service chunk on an
+            # unrelated code-review question) was rank 2+, never rank 0 --
+            # so dropping only the tail keeps that fix while not returning
+            # "no information" when the top hit is genuinely correct.
+            if rank > 0 and settings.MAX_DISTANCE is not None and dist > settings.MAX_DISTANCE:
                 dropped.append((meta["source"], dist))
                 continue
             matches.append({

@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.8.2 (2026-08-21) — assistant-container
+
+### Fixed
+- `retriever.py`: `max_distance` now only filters ranks 1+ (chromadb result index),
+  rank 0 (the closest match) is always kept. A bare keyword query with no
+  surrounding sentence ("Deployment") embeds measurably farther from its own
+  correct document than the same word inside a real question does (324 vs 246
+  on this corpus) -- past a fixed cutoff either way, but it's still the best
+  available answer and was wrongly dropped, returning "no information". Every
+  case where an irrelevant chunk actually leaked into an answer was rank 2+,
+  never rank 0, so this keeps that fix while not discarding a genuinely
+  correct top hit just because the query was terse.
+
 ## 1.8.1 (2026-08-21) — assistant-container
 
 ### Fixed
