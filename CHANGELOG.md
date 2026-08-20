@@ -1,5 +1,39 @@
 # Changelog
 
+## 1.9.0 (2026-08-21) — assistant-container
+
+### Added
+- `main.py` / `ChatSidebar.tsx`: strict/combined answer mode toggle. Strict (default,
+  unchanged behavior) answers only from retrieved context, honest "no information" if
+  empty. Combined falls back to the LLM's own general knowledge when retrieval finds
+  nothing, with a mandatory anti-hallucination system prompt and a required
+  "(ответ не из базы знаний)" disclaimer prefix.
+- `main.py`: `answer_source` field ("rag" / "llm_knowledge" / "no_info") on every
+  `/chat` response, driven structurally by whether retrieval matched anything rather
+  than parsing the LLM's own self-description -- `AnswerPanel.tsx` shows it as a badge.
+- `main.py`: query-normalization LLM call before retrieval -- expands slang/abbreviations
+  ("кубер" -> "Kubernetes") into a cleaner search query before embedding. Motivated by a
+  direct comparison: OpenCode's MCP tool-calling already does this implicitly (the agent
+  picks its own search terms), and its answers were noticeably better than `/chat`
+  embedding the user's raw informal phrasing. `/search` (what MCP's `search_docs` calls)
+  is untouched -- an agent already choosing its own query text makes this redundant
+  there. Master switch `search.normalize_query` in `mcp-tools.yaml` (default on), plus a
+  per-request `normalize_query` override the master switch always wins over.
+- `SettingsMenu.tsx` (replaces `ThemeToggle.tsx`): gear-icon popover with the
+  normalize-query toggle (for quick A/B testing) and the theme switch together.
+- Dark/light theme toggle across all components, `tailwind.config.js` `darkMode: "class"`,
+  inline script in `layout.tsx` `<head>` to set the class before hydration (no flash).
+  Light mode contrast raised too (page background darkened relative to card/sidebar
+  backgrounds -- they read as near-identical grays before).
+
+### Fixed
+- `main.py`: sources deduplicated per source file instead of once per matched chunk
+  (multiple chunks from the same doc rendered as repeated entries). Chips are now
+  clickable and expand the full matched chunk text inline, not just the file name.
+- `mcp-tools.yaml` / `settings.py`: removed `chat.show_sources` / the inline
+  "**Источники:** ..." text appended to the answer -- it duplicated the sources chip UI
+  that already renders separately (visibly, as two different-looking source lists).
+
 ## 1.8.2 (2026-08-21) — assistant-container
 
 ### Fixed

@@ -33,5 +33,9 @@ TOPICS_DEFAULT_TOP_K = _cfg.get("topics", {}).get("default_top_k", 100)
 TOPICS_MAX = _cfg.get("topics", {}).get("max_topics", 500)
 
 LLM_MAX_TOKENS = _cfg.get("llm", {}).get("max_tokens", 2048)
-CHAT_SHOW_SOURCES = _cfg.get("chat", {}).get("show_sources", False)
-CHAT_SOURCES_SEPARATOR = _cfg.get("chat", {}).get("sources_separator", "\n\n---\n**Источники:** ")
+# Extra LLM call before search to expand slang/abbreviations into a cleaner
+# query for embedding. Adds latency (one more generation round-trip) but
+# noticeably improves retrieval on informal phrasing -- see main.py's
+# _normalize_query for the concrete "кубер" -> "Kubernetes" case that
+# motivated this.
+NORMALIZE_QUERY = _cfg.get("search", {}).get("normalize_query", True)
