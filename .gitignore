@@ -1,3 +1,12 @@
 .idea
 **/offline-bundle/
 
+*.tar.gz
+*.tar
+*.tag.gz
+*.gz
+*.zip
+
+__pycache__/
+*.pyc
+node_modules/

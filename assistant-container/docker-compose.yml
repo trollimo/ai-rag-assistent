@@ -19,7 +19,7 @@ services:
       - "9080:9080"   # llama-server LLM inference
     volumes:
       - ../rag-generation/output/chroma_db:/data/chroma_db
-      # - ./backend:/app/backend
+      - ./backend:/app/backend
       - ./entrypoint.sh:/app/entrypoint.sh
       # - ./backend/config/mcp-tools.yaml:/app/backend/config/mcp-tools.yaml  # раскомментировать для правки описания инструментов без пересборки
     environment:
