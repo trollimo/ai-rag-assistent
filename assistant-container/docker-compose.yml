@@ -3,7 +3,7 @@ services:
   #   docker compose up assistant       (starts only the assistant)
   # and set LLM_BASE_URL / LLM_API_KEY / LLM_MODEL_NAME on the assistant.
   llm:
-    image: rag-llm
+    image: rag-llm:1.7.0
     build:
       context: .
       dockerfile: Dockerfile.llm
@@ -26,7 +26,7 @@ services:
     restart: unless-stopped
 
   assistant:
-    image: rag-offline
+    image: rag-offline:1.7.1
     build:
       context: .
       dockerfile: Dockerfile.offline
