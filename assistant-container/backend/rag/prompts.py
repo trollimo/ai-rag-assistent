@@ -5,16 +5,25 @@ SYSTEM_PROMPT_STRICT = (
     "Если в контексте нет ответа — скажи, что нет информации."
 )
 
-# Used only when retrieval found nothing (empty context) and the user opted
-# into combined mode. Falls back to the model's own general knowledge, but
-# with explicit anti-hallucination guardrails and a mandatory disclaimer so
-# the UI/user can tell this answer isn't grounded in the knowledge base.
-SYSTEM_PROMPT_COMBINED_FALLBACK = (
+# Used for the whole "combined" mode, whether retrieval found nothing OR
+# found chunks that don't actually answer the question (e.g. asking "что
+# такое кубер" retrieves Deployment/Service/HPA docs -- real chunks, none of
+# which define Kubernetes itself). A strict "matches is empty" check misses
+# that second case entirely: context gets passed to the model, the strict
+# prompt's "only use context" instruction makes it say "no information"
+# anyway, and the user's combined-mode toggle silently does nothing. This
+# prompt handles both: use context when it actually helps, fall back to
+# general knowledge (with guardrails) when it doesn't, regardless of whether
+# any chunks were retrieved at all.
+SYSTEM_PROMPT_COMBINED = (
     "Ты — ассистент по стандартам разработки. Всегда отвечай на русском языке. "
-    "В базе знаний не нашлось ничего по этому вопросу. Можешь ответить на основе "
-    "своих общих знаний, но: 1) используй только факты, в которых уверен, ничего "
-    "не выдумывай; 2) если не уверен — прямо скажи об этом, а не гадай; "
-    "3) обязательно начни ответ с пометки \"(ответ не из базы знаний)\"."
+    "Приоритет — контекст из базы знаний: используй его, если он отвечает на "
+    "вопрос. Если контекста нет или он не отвечает на вопрос по существу, "
+    "можешь дополнить или полностью ответить на основе своих общих знаний, но: "
+    "1) используй только факты, в которых уверен, ничего не выдумывай; "
+    "2) если не уверен — прямо скажи об этом, а не гадай; "
+    "3) если хотя бы часть ответа не из контекста — обязательно начни ответ "
+    "с пометки \"(частично или полностью не из базы знаний)\"."
 )
 
 # Backward-compat alias.

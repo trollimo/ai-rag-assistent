@@ -8,7 +8,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from backend.rag.retriever import Retriever
-from backend.rag.prompts import SYSTEM_PROMPT_STRICT, SYSTEM_PROMPT_COMBINED_FALLBACK, RAG_PROMPT_TEMPLATE
+from backend.rag.prompts import SYSTEM_PROMPT_STRICT, SYSTEM_PROMPT_COMBINED, RAG_PROMPT_TEMPLATE
 from backend.core import settings
 from backend.core.logging_config import setup_logging
 
@@ -176,9 +176,13 @@ async def chat(req: ChatRequest):
     context = "\n\n".join([m['text'] for m in matches])
     logger.debug("RAG context=%s", context)
 
-    combined_fallback = req.mode == "combined" and not matches
-    system_prompt = SYSTEM_PROMPT_COMBINED_FALLBACK if combined_fallback else SYSTEM_PROMPT_STRICT
-    answer_source = "llm_knowledge" if combined_fallback else ("rag" if matches else "no_info")
+    # Combined mode always gets the combined prompt, not just when matches is
+    # empty -- retrieval can return real chunks that simply don't answer the
+    # question (e.g. "что такое кубер" pulls Deployment/Service/HPA docs,
+    # none of which define Kubernetes), and the strict prompt's "only use
+    # context" instruction would make the model say "no information" anyway,
+    # silently ignoring the user's combined-mode toggle.
+    system_prompt = SYSTEM_PROMPT_COMBINED if req.mode == "combined" else SYSTEM_PROMPT_STRICT
 
     user_prompt = RAG_PROMPT_TEMPLATE.format(context=context, question=req.question)
     messages = [
@@ -186,6 +190,18 @@ async def chat(req: ChatRequest):
         {"role": "user", "content": user_prompt},
     ]
     answer = await _ask_llama(messages)
+
+    # SYSTEM_PROMPT_COMBINED requires this exact marker when the model used
+    # (fully or partly) its own knowledge instead of the context -- structural
+    # signal instead of guessing from matches count, which is what silently
+    # mislabeled the "кубер" case above. Stripped from the visible answer
+    # since the UI badge already conveys it.
+    off_base_marker = "(частично или полностью не из базы знаний)"
+    if answer.strip().startswith(off_base_marker):
+        answer = answer.strip()[len(off_base_marker):].lstrip(" :-\n")
+        answer_source = "llm_knowledge"
+    else:
+        answer_source = "rag" if matches else "no_info"
 
     logger.info("REST /chat answer=%s answer_source=%s", answer, answer_source)
 
