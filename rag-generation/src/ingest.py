@@ -1,4 +1,5 @@
 import logging
+import time
 from pathlib import Path
 import json
 import yaml
@@ -84,7 +85,14 @@ def main():
 
     if docs:
         log.info("Writing %d chunks to ChromaDB ...", len(docs))
+        t0 = time.perf_counter()
         collection.upsert(ids=ids, documents=docs, metadatas=metas)
+        upsert_elapsed = time.perf_counter() - t0
+        embed_elapsed = embedding_func.total_embed_seconds
+        log.info(
+            "Timing: upsert_total=%.2fs embedding=%.2fs chroma_write=%.2fs (%d chunks)",
+            upsert_elapsed, embed_elapsed, upsert_elapsed - embed_elapsed, len(docs),
+        )
 
     manifest = generate_manifest(
         docs, source_names,

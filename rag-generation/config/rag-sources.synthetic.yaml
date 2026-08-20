@@ -1,0 +1,18 @@
+sources:
+  - name: synthetic
+    path: ./docs/synthetic
+    include:
+      - "**/*.md"
+
+chunking:
+  method: markdown_headers_then_fallback
+  chunk_size: 1200
+  overlap: 200
+
+storage:
+  type: chromadb
+  path: ./output/chroma_db_synthetic
+  collection: knowledge_base_synthetic
+
+embeddings:
+  model: intfloat/multilingual-e5-large
