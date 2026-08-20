@@ -10,10 +10,10 @@ logger = logging.getLogger("backend.rag")
 class Retriever:
     def __init__(self):
         self.client = chromadb.PersistentClient(path=str(settings.RAG_DB_PATH))
-        embedding_func = MultilingualEmbeddingFunction(model_name=settings.EMBEDDINGS_MODEL)
+        self.embedding_func = MultilingualEmbeddingFunction(model_name=settings.EMBEDDINGS_MODEL)
         self.collection = self.client.get_or_create_collection(
             name=settings.COLLECTION_NAME,
-            embedding_function=embedding_func,
+            embedding_function=self.embedding_func,
         )
         count = self.collection.count()
         if count:
@@ -36,7 +36,12 @@ class Retriever:
             where_clause = None
         else:
             where_clause = {"$and": [{k: v} for k, v in where.items()]} if len(where) > 1 else where
-        result = self.collection.query(query_texts=[query], n_results=top_k, where=where_clause)
+        # Embed the query ourselves so the e5 "query:" prefix is applied —
+        # query_texts would route through __call__, which prefixes documents.
+        query_vec = self.embedding_func.embed_query(query)
+        result = self.collection.query(
+            query_embeddings=[query_vec], n_results=top_k, where=where_clause
+        )
         matches = []
         for doc, meta, dist in zip(
             result["documents"][0],
