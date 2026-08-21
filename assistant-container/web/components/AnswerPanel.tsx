@@ -1,8 +1,129 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import { AnswerSource, Turn, topicLabel } from "./types";
+
+const API_URL = process.env.NEXT_PUBLIC_FASTAPI_URL || "http://localhost:8000";
+
+function CopyButton({ text }: { text: string }) {
+  const [copied, setCopied] = useState(false);
+  return (
+    <button
+      onClick={async () => {
+        await navigator.clipboard.writeText(text);
+        setCopied(true);
+        setTimeout(() => setCopied(false), 1500);
+      }}
+      title="Скопировать ответ для передачи ИИ-агенту (OpenCode и т.п.)"
+      className="shrink-0 flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-neutral-800 dark:text-neutral-300 dark:hover:bg-neutral-700 transition-colors"
+    >
+      <span>{copied ? "✅" : "📋"}</span>
+      <span>{copied ? "Скопировано" : "Скопировать"}</span>
+    </button>
+  );
+}
+
+type Reaction = "up" | "down" | null;
+
+function ReactionBar({ turn }: { turn: Turn }) {
+  const [reaction, setReaction] = useState<Reaction>(null);
+  const [showFeedback, setShowFeedback] = useState(false);
+  const [feedback, setFeedback] = useState("");
+  const [feedbackSent, setFeedbackSent] = useState(false);
+  const [showContribute, setShowContribute] = useState(false);
+  const [contributeHint, setContributeHint] = useState<string | null>(null);
+
+  useEffect(() => {
+    // Reset per-turn UI state when switching between turns in the sidebar.
+    setReaction(null);
+    setShowFeedback(false);
+    setFeedback("");
+    setFeedbackSent(false);
+    setShowContribute(false);
+  }, [turn.id]);
+
+  const openContribute = () => {
+    setShowContribute((v) => !v);
+    if (!contributeHint) {
+      fetch(`${API_URL}/reactions/config`)
+        .then((r) => r.json())
+        .then((d) => setContributeHint(d.contribute_hint))
+        .catch(() => setContributeHint("Не удалось загрузить подсказку."));
+    }
+  };
+
+  return (
+    <div className="mt-2">
+      <div className="flex flex-wrap gap-2">
+        <button
+          onClick={() => setReaction(reaction === "up" ? null : "up")}
+          className={`flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full transition-colors ${
+            reaction === "up"
+              ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300"
+              : "bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-neutral-800 dark:text-neutral-300 dark:hover:bg-neutral-700"
+          }`}
+        >
+          👍 Ответ подошёл
+        </button>
+        <button
+          onClick={() => {
+            const next = reaction === "down" ? null : "down";
+            setReaction(next);
+            setShowFeedback(next === "down");
+          }}
+          className={`flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full transition-colors ${
+            reaction === "down"
+              ? "bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-300"
+              : "bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-neutral-800 dark:text-neutral-300 dark:hover:bg-neutral-700"
+          }`}
+        >
+          👎 Не то
+        </button>
+        <button
+          onClick={openContribute}
+          className={`flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full transition-colors ${
+            showContribute
+              ? "bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300"
+              : "bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-neutral-800 dark:text-neutral-300 dark:hover:bg-neutral-700"
+          }`}
+        >
+          💡 Знаю больше
+        </button>
+      </div>
+
+      {showFeedback && (
+        <div className="mt-2 text-xs bg-gray-50 dark:bg-neutral-800 rounded-lg p-3">
+          {feedbackSent ? (
+            <p className="text-gray-500 dark:text-neutral-400">Спасибо, учтём.</p>
+          ) : (
+            <>
+              <p className="text-gray-500 dark:text-neutral-400 mb-2">Что не так с ответом? (необязательно)</p>
+              <textarea
+                value={feedback}
+                onChange={(e) => setFeedback(e.target.value)}
+                placeholder="Неверный источник, устаревшая информация..."
+                className="w-full h-14 text-xs border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-blue-400"
+              />
+              <button
+                onClick={() => setFeedbackSent(true)}
+                className="mt-1.5 text-xs px-2.5 py-1 rounded-full bg-blue-600 text-white hover:bg-blue-700"
+              >
+                Отправить
+              </button>
+            </>
+          )}
+        </div>
+      )}
+
+      {showContribute && (
+        <div className="mt-2 text-xs bg-gray-50 dark:bg-neutral-800 rounded-lg p-3 text-gray-600 dark:text-neutral-300">
+          {contributeHint || "Загрузка..."}
+        </div>
+      )}
+    </div>
+  );
+}
 
 const BADGE: Record<AnswerSource, { icon: string; label: string; className: string }> = {
   rag: {
@@ -82,14 +203,19 @@ export default function AnswerPanel({
             <p className="text-sm text-red-500">{turn.error}</p>
           ) : (
             <>
-              {turn.answer_source !== "no_info" && (
-                <div
-                  className={`inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full mb-4 ${badge.className}`}
-                >
-                  <span>{badge.icon}</span>
-                  <span>{badge.label}</span>
-                </div>
-              )}
+              <div className="flex items-start justify-between gap-3 mb-4">
+                {turn.answer_source !== "no_info" ? (
+                  <div
+                    className={`inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full ${badge.className}`}
+                  >
+                    <span>{badge.icon}</span>
+                    <span>{badge.label}</span>
+                  </div>
+                ) : (
+                  <span />
+                )}
+                <CopyButton text={turn.answer} />
+              </div>
               <div className="answer-markdown prose prose-sm dark:prose-invert max-w-none prose-pre:bg-gray-900 prose-pre:text-gray-100">
                 <ReactMarkdown>{turn.answer}</ReactMarkdown>
               </div>
@@ -129,6 +255,13 @@ export default function AnswerPanel({
                     ))}
                   </div>
                 ))}
+            </div>
+          )}
+
+          {!turn.loading && !turn.error && (
+            <div className="mt-4 pt-4 border-t border-gray-100 dark:border-neutral-800 flex items-start justify-between gap-3">
+              <ReactionBar turn={turn} />
+              <CopyButton text={turn.answer} />
             </div>
           )}
         </div>

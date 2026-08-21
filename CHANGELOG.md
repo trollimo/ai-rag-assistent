@@ -1,5 +1,19 @@
 # Changelog
 
+## 1.12.0 (2026-08-21) — assistant-container
+
+### Added
+- `AnswerPanel.tsx`: reaction row on every answer -- 👍 "Ответ подошёл", 👎 "Не то" (expands
+  an inline "what's wrong?" textarea), 💡 "Знаю больше" (opens a contribute-hint popover).
+  UI-only stubs for now, nothing is persisted yet -- prep work for the reactions/stats layer
+  in the CLAUDE.md backlog, not that layer itself.
+- `main.py` / `mcp-tools.yaml`: new `GET /reactions/config` endpoint serving the 💡 popover
+  text from `reactions.contribute_hint` in the yaml config, editable without a rebuild via
+  the same bind-mount pattern as the rest of `mcp-tools.yaml`.
+- `AnswerPanel.tsx`: "📋 Скопировать" button at both the top and bottom of the answer card --
+  copies the answer text to the clipboard for pasting into OpenCode or another AI agent.
+  This one is fully functional, not a stub.
+
 ## 1.11.0 (2026-08-21) — assistant-container
 
 ### Added

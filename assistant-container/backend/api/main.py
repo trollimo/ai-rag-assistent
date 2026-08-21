@@ -61,6 +61,18 @@ def root():
     return {"status": "ok"}
 
 
+class ReactionsConfigResponse(BaseModel):
+    contribute_hint: str
+
+
+@app.get("/reactions/config", response_model=ReactionsConfigResponse)
+def reactions_config():
+    # Reaction buttons (👍/👎/💡) are UI-only stubs for now -- see CLAUDE.md
+    # backlog item on a dedicated reactions/stats table. Only this popover
+    # text is served from config so it can be edited without a rebuild.
+    return ReactionsConfigResponse(contribute_hint=settings.REACTIONS_CONTRIBUTE_HINT)
+
+
 class SearchRequest(BaseModel):
     query: str
     top_k: int = 5

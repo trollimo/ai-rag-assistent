@@ -39,3 +39,8 @@ LLM_MAX_TOKENS = _cfg.get("llm", {}).get("max_tokens", 2048)
 # _normalize_query for the concrete "кубер" -> "Kubernetes" case that
 # motivated this.
 NORMALIZE_QUERY = _cfg.get("search", {}).get("normalize_query", True)
+
+REACTIONS_CONTRIBUTE_HINT = _cfg.get("reactions", {}).get(
+    "contribute_hint",
+    "Не нашли готовый ответ, но знаете его сами? Свяжитесь с командой базы знаний.",
+).strip()
