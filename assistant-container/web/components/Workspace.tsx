@@ -1,10 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import ChatSidebar from "./ChatSidebar";
 import AnswerPanel from "./AnswerPanel";
 import TopicsPanel from "./TopicsPanel";
 import SettingsMenu from "./SettingsMenu";
+import Mascot, { MascotState } from "./Mascot";
 import { ChatMode, Turn } from "./types";
 
 const API_URL = process.env.NEXT_PUBLIC_FASTAPI_URL || "http://localhost:8000";
@@ -18,7 +19,61 @@ export default function Workspace() {
   const [mode, setMode] = useState<ChatMode>("strict");
   const [normalizeQuery, setNormalizeQuery] = useState(true);
 
+  // 384px = 320px (old fixed w-80) * 1.2 -- default 20% wider, then user-resizable.
+  const [sidebarWidth, setSidebarWidth] = useState(384);
+  const dragging = useRef(false);
+
+  useEffect(() => {
+    const stored = localStorage.getItem("sidebarWidth");
+    if (stored) setSidebarWidth(Number(stored));
+  }, []);
+
+  useEffect(() => {
+    const onMove = (e: MouseEvent) => {
+      if (!dragging.current) return;
+      setSidebarWidth(Math.min(640, Math.max(260, e.clientX)));
+    };
+    const onUp = () => {
+      if (!dragging.current) return;
+      dragging.current = false;
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+      setSidebarWidth((w) => {
+        localStorage.setItem("sidebarWidth", String(w));
+        return w;
+      });
+    };
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+    return () => {
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+    };
+  }, []);
+
+  const startResize = () => {
+    dragging.current = true;
+    document.body.style.cursor = "col-resize";
+    document.body.style.userSelect = "none";
+  };
+
   const anyLoading = turns.some((t) => t.loading);
+
+  const [mascotState, setMascotState] = useState<MascotState>("idle");
+  const wasLoading = useRef(false);
+  useEffect(() => {
+    if (anyLoading) {
+      wasLoading.current = true;
+      setMascotState("thinking");
+      return;
+    }
+    if (wasLoading.current) {
+      wasLoading.current = false;
+      setMascotState("happy");
+      const t = setTimeout(() => setMascotState("idle"), 2500);
+      return () => clearTimeout(t);
+    }
+  }, [anyLoading]);
 
   const ask = async (question: string) => {
     if (!question.trim() || anyLoading) return;
@@ -75,7 +130,10 @@ export default function Workspace() {
 
   return (
     <div className="flex h-screen bg-gray-100 dark:bg-neutral-950">
-      <aside className="w-80 shrink-0 bg-white dark:bg-neutral-900 border-r border-gray-300 dark:border-neutral-700 flex flex-col h-full">
+      <aside
+        style={{ width: sidebarWidth }}
+        className="relative shrink-0 bg-white dark:bg-neutral-900 border-r border-gray-300 dark:border-neutral-700 flex flex-col h-full"
+      >
         <div className="flex-1 min-h-0">
           <ChatSidebar
             turns={turns}
@@ -95,10 +153,18 @@ export default function Workspace() {
         <div className="shrink-0 border-t border-gray-300 dark:border-neutral-700 px-3 py-2 flex justify-end">
           <SettingsMenu normalizeQuery={normalizeQuery} setNormalizeQuery={setNormalizeQuery} />
         </div>
+        {/* Drag handle: invisible until hover, widens the hit area beyond the 1px border */}
+        <div
+          onMouseDown={startResize}
+          className="absolute top-0 right-0 -mr-1 w-2 h-full cursor-col-resize group z-10"
+        >
+          <div className="w-0.5 h-full mx-auto group-hover:bg-blue-400 dark:group-hover:bg-blue-500 transition-colors" />
+        </div>
       </aside>
       <main className="flex-1 min-w-0">
         <AnswerPanel turn={activeTurn} onAskRelated={ask} />
       </main>
+      <Mascot state={mascotState} />
     </div>
   );
 }

@@ -26,6 +26,7 @@ export default function ChatSidebar({
 }) {
   const bottomRef = useRef<HTMLDivElement>(null);
   const [showHint, setShowHint] = useState(false);
+  const [showAboutHint, setShowAboutHint] = useState(false);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -34,8 +35,29 @@ export default function ChatSidebar({
   return (
     <div className="flex flex-col h-full">
       <div className="px-4 py-4 border-b border-gray-200 dark:border-neutral-700">
-        <h1 className="text-lg font-semibold text-gray-800 dark:text-neutral-100">RAG Ассистент</h1>
-        <p className="text-xs text-gray-400 dark:text-neutral-500 mt-0.5">Стандарты разработки</p>
+        <div className="flex items-center gap-1.5">
+          <h1 className="text-lg font-semibold text-gray-800 dark:text-neutral-100">Архивариус</h1>
+          <div className="relative">
+            <button
+              aria-label="Как это работает"
+              onClick={() => setShowAboutHint((v) => !v)}
+              onBlur={() => setShowAboutHint(false)}
+              className="w-4 h-4 flex items-center justify-center rounded-full text-[10px] leading-none text-gray-400 dark:text-neutral-500 border border-gray-300 dark:border-neutral-600 hover:text-blue-600 hover:border-blue-400 dark:hover:text-blue-400 dark:hover:border-blue-500"
+            >
+              ?
+            </button>
+            {showAboutHint && (
+              <div className="absolute top-full left-0 mt-1 w-64 text-xs bg-gray-800 dark:bg-neutral-700 text-white rounded-lg px-3 py-2 shadow-lg z-20">
+                Архивариус ищет ответ в базе корпоративных стандартов и инструкций.
+                Режим «Только база знаний» отвечает исключительно тем, что там
+                нашлось; «База + знания LLM» может дополнить ответ общими
+                знаниями модели, если в базе не хватает — такие места отмечаются
+                значком 🧠.
+              </div>
+            )}
+          </div>
+        </div>
+        <p className="text-xs text-gray-400 dark:text-neutral-500 mt-0.5">Стандарты и инструкции</p>
       </div>
 
       <div className="flex-1 overflow-y-auto px-2 py-2 space-y-1">

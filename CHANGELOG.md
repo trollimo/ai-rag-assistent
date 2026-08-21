@@ -1,5 +1,53 @@
 # Changelog
 
+## 1.11.0 (2026-08-21) — assistant-container
+
+### Added
+- `Mascot.tsx` (new): "Архивариус" mascot — an open-book character docked bottom-right,
+  draggable anywhere in the viewport (position persisted to `localStorage`), gently
+  floating/blinking when idle. Reflects request state: raised eyebrow + pulsing dots while
+  a question is loading, closed happy eyes + checkmark badge for a few seconds after an
+  answer lands. Wired into `Workspace.tsx` off the existing `anyLoading` turn state.
+- `prepare-offline-bundle.ps1`: fixed a real staleness bug -- the Next.js standalone build
+  step skipped itself whenever `offline-bundle/next-standalone` already had >1MB in it, with
+  no check for whether the source had actually changed. This silently served a stale UI
+  bundle through several Docker rebuilds earlier in the project's history. Now always
+  rebuilds (`npm install` + `npm run build`) since it's a fast local build, not an expensive
+  network fetch like the other cached steps in this script.
+
+## 1.10.1 (2026-08-21) — assistant-container
+
+### Fixed
+- `main.py`: the off-base-knowledge marker used to detect `answer_source: llm_knowledge`
+  in combined mode was only checked as a prefix (`.startswith`). The LLM sometimes prepends
+  a meta-commentary sentence about following instructions before the marker instead of
+  starting with it, so the check silently missed it -- badge stayed "📚 rag" and the stray
+  reasoning sentence leaked into the visible answer. Now searches the whole answer for the
+  marker and strips everything up to and including it, regardless of position.
+- `prompts.py`: `SYSTEM_PROMPT_COMBINED` now explicitly forbids narrating that it's
+  following the marker instruction -- the model was doing this openly instead of just
+  emitting the marker silently.
+
+## 1.10.0 (2026-08-21) — assistant-container
+
+### Added
+- Rebrand: "RAG Ассистент" → "Архивариус" (`ChatSidebar.tsx`, `layout.tsx` title); subtitle
+  "Стандарты разработки" → "Стандарты и инструкции".
+- `ChatSidebar.tsx`: (?) icon next to the header opens a short popover explaining strict
+  vs combined mode and the 🧠 badge.
+- `Workspace.tsx`: sidebar is now 20% wider by default (384px vs the old fixed 320px) and
+  user-resizable via a drag handle on its right edge, clamped to 260-640px and persisted
+  to `localStorage`.
+
+### Fixed
+- `prompts.py` / `main.py`: combined mode only fell back to the LLM's general knowledge
+  when retrieval returned zero matches. Real-but-irrelevant chunks (e.g. "что такое кубер"
+  pulling Deployment/Service docs) still triggered the strict prompt, silently ignoring
+  the combined-mode toggle. Unified into one combined system prompt that uses context when
+  it actually answers the question and falls back to general knowledge (fact-only, marked)
+  otherwise; `answer_source` is now derived from a structural marker in the reply instead
+  of guessed from whether any chunks were retrieved.
+
 ## 1.9.0 (2026-08-21) — assistant-container
 
 ### Added

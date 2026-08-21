@@ -195,10 +195,15 @@ async def chat(req: ChatRequest):
     # (fully or partly) its own knowledge instead of the context -- structural
     # signal instead of guessing from matches count, which is what silently
     # mislabeled the "кубер" case above. Stripped from the visible answer
-    # since the UI badge already conveys it.
+    # since the UI badge already conveys it. Despite the prompt demanding the
+    # marker be the very first characters, the model sometimes prepends a
+    # meta-commentary sentence about following the instruction first -- search
+    # the whole answer (not just the prefix) and drop everything up to and
+    # including the marker, since that preamble is never meant for the user.
     off_base_marker = "(частично или полностью не из базы знаний)"
-    if answer.strip().startswith(off_base_marker):
-        answer = answer.strip()[len(off_base_marker):].lstrip(" :-\n")
+    marker_pos = answer.find(off_base_marker)
+    if marker_pos != -1:
+        answer = answer[marker_pos + len(off_base_marker):].lstrip(" :-\n")
         answer_source = "llm_knowledge"
     else:
         answer_source = "rag" if matches else "no_info"

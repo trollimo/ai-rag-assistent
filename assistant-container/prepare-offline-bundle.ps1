@@ -117,30 +117,32 @@ if ($feCacheSize -gt 1MB) {
 }
 
 # ── 7/7: Next.js build ─────────────────────────────────────────
-$nextFiles = Get-ChildItem $NextStandalone -Recurse -File -ErrorAction SilentlyContinue
-$nextSize = ($nextFiles | Measure-Object -Property Length -Sum).Sum
-if ($nextSize -gt 1MB) {
-    Write-Host "[6/6] Next.js standalone already built ($([math]::Round($nextSize / 1MB, 1)) MB), skipping" -ForegroundColor Yellow
-} else {
-    Write-Host "[6/6] Building Next.js (npm install + npm run build)..." -ForegroundColor Green
-    Push-Location (Join-Path $ScriptDir "web")
-    npm install --no-audit --no-fund 2>&1 | Out-Null
-    if ($LASTEXITCODE -ne 0) { throw "npm install failed" }
-    npm run build 2>&1 | Out-Null
-    if ($LASTEXITCODE -ne 0) { throw "npm run build failed" }
+# Always rebuilt (unlike the download steps above) -- it's a local build of
+# fast-changing source, not an expensive network fetch, so there is no safe
+# way to tell "already built" apart from "built from stale source" without
+# hashing the web/ tree. A stale skip here silently served old UI code
+# through multiple Docker rebuilds before this was caught.
+Write-Host "[6/6] Building Next.js (npm install + npm run build)..." -ForegroundColor Green
+Push-Location (Join-Path $ScriptDir "web")
+npm install --no-audit --no-fund 2>&1 | Out-Null
+if ($LASTEXITCODE -ne 0) { throw "npm install failed" }
+npm run build 2>&1 | Out-Null
+if ($LASTEXITCODE -ne 0) { throw "npm run build failed" }
 
-    if (Test-Path ".next/standalone") {
-        Copy-Item -Path ".next/standalone/*" -Destination $NextStandalone -Recurse -Force
-    }
-    if (Test-Path "public") {
-        Copy-Item -Path "public/*" -Destination $NextPublic -Recurse -Force
-    }
-    if (Test-Path ".next/static") {
-        Copy-Item -Path ".next/static/*" -Destination $NextStatic -Recurse -Force
-    }
-    Pop-Location
-    Write-Host "      Next.js standalone saved" -ForegroundColor Green
+Remove-Item (Join-Path $NextStandalone "*") -Recurse -Force -ErrorAction SilentlyContinue
+Remove-Item (Join-Path $NextPublic "*") -Recurse -Force -ErrorAction SilentlyContinue
+Remove-Item (Join-Path $NextStatic "*") -Recurse -Force -ErrorAction SilentlyContinue
+if (Test-Path ".next/standalone") {
+    Copy-Item -Path ".next/standalone/*" -Destination $NextStandalone -Recurse -Force
 }
+if (Test-Path "public") {
+    Copy-Item -Path "public/*" -Destination $NextPublic -Recurse -Force
+}
+if (Test-Path ".next/static") {
+    Copy-Item -Path ".next/static/*" -Destination $NextStatic -Recurse -Force
+}
+Pop-Location
+Write-Host "      Next.js standalone saved" -ForegroundColor Green
 
 # ── Summary ────────────────────────────────────────────────────
 Write-Host ""

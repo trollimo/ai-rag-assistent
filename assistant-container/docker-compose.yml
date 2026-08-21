@@ -26,7 +26,7 @@ services:
     restart: unless-stopped
 
   assistant:
-    image: rag-offline:1.9.0
+    image: rag-offline:1.11.0
     build:
       context: .
       dockerfile: Dockerfile.offline
