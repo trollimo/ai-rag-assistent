@@ -4,10 +4,12 @@ from collections import Counter
 from pathlib import Path
 
 import httpx
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from backend.rag.retriever import Retriever
+from backend.rag.skills_registry import SkillsRegistry
 from backend.rag.prompts import SYSTEM_PROMPT_STRICT, SYSTEM_PROMPT_COMBINED, RAG_PROMPT_TEMPLATE
 from backend.core import settings
 from backend.core.logging_config import setup_logging
@@ -23,6 +25,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 retriever = Retriever()
+skills_registry = SkillsRegistry(settings.RAG_SKILLS_PATH / "index.json")
 
 # TODO: переделать на расширяемый справочник (YAML/DB)
 _STOP_WORDS = {
@@ -54,6 +57,7 @@ class ChatResponse(BaseModel):
     related_topics: list = []
     answer_source: str = "no_info"  # "rag" | "llm_knowledge" | "no_info" -- for the UI badge
     normalized_query: str | None = None  # what was actually embedded for search, if different
+    skills: list = []  # [{name, title, download_url}] -- skills touched by the matched chunks
 
 
 @app.get("/")
@@ -71,6 +75,69 @@ def reactions_config():
     # backlog item on a dedicated reactions/stats table. Only this popover
     # text is served from config so it can be edited without a rebuild.
     return ReactionsConfigResponse(contribute_hint=settings.REACTIONS_CONTRIBUTE_HINT)
+
+
+class SkillSummary(BaseModel):
+    name: str
+    title: str
+    description: str
+    version: str
+    files_count: int
+    size_bytes: int
+    download_url: str
+
+
+class SkillDetail(SkillSummary):
+    files: list
+    sha256: str
+    install_hint: str
+
+
+class SkillsListResponse(BaseModel):
+    skills: list[SkillSummary]
+
+
+def _skill_summary(entry: dict) -> SkillSummary:
+    name = entry["name"]
+    return SkillSummary(
+        name=name,
+        title=entry.get("title", name),
+        description=entry.get("description", ""),
+        version=entry.get("version", ""),
+        files_count=len(entry.get("files", [])),
+        size_bytes=entry.get("size_bytes", 0),
+        download_url=f"{settings.PUBLIC_BASE_URL}/skills/{name}/archive",
+    )
+
+
+@app.get("/skills", response_model=SkillsListResponse)
+def list_skills():
+    return SkillsListResponse(skills=[_skill_summary(e) for e in skills_registry.list()])
+
+
+@app.get("/skills/{name}", response_model=SkillDetail)
+def get_skill(name: str):
+    entry = skills_registry.get(name)
+    if not entry:
+        raise HTTPException(status_code=404, detail="Skill not found")
+    summary = _skill_summary(entry)
+    install_hint = settings.SKILLS_INSTALL_HINT.format(
+        name=summary.name, download_url=summary.download_url
+    )
+    return SkillDetail(
+        **summary.model_dump(),
+        files=entry.get("files", []),
+        sha256=entry.get("sha256", ""),
+        install_hint=install_hint,
+    )
+
+
+@app.get("/skills/{name}/archive")
+def download_skill_archive(name: str):
+    path = skills_registry.archive_path(name)
+    if not path:
+        raise HTTPException(status_code=404, detail="Skill archive not found")
+    return FileResponse(path, media_type="application/zip", filename=path.name)
 
 
 class SearchRequest(BaseModel):
@@ -236,6 +303,20 @@ async def chat(req: ChatRequest):
         entry = sources_by_file.setdefault(m["source"], {"source": m["source"], "chunks": []})
         entry["chunks"].append({"chunk": m["chunk"], "text": m["text"], "distance": m.get("distance")})
 
+    # Which skills (if any) this answer touches -- structural, from the
+    # matched chunks' metadata, no extra LLM call needed. Lets the UI show
+    # "📦 this answer touches an installable skill" under the answer.
+    skill_names = sorted({m["skill_name"] for m in matches if m.get("skill_name")})
+    skills_hit = []
+    for skill_name in skill_names:
+        entry = skills_registry.get(skill_name)
+        if entry:
+            skills_hit.append({
+                "name": skill_name,
+                "title": entry.get("title", skill_name),
+                "download_url": f"{settings.PUBLIC_BASE_URL}/skills/{skill_name}/archive",
+            })
+
     return ChatResponse(
         question=req.question,
         answer=answer,
@@ -243,6 +324,7 @@ async def chat(req: ChatRequest):
         related_topics=related_topics,
         answer_source=answer_source,
         normalized_query=search_query if search_query != req.question else None,
+        skills=skills_hit,
     )
 
 

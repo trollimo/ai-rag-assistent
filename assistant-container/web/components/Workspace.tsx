@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import ChatSidebar from "./ChatSidebar";
 import AnswerPanel from "./AnswerPanel";
+import SkillsPanel from "./SkillsPanel";
 import TopicsPanel from "./TopicsPanel";
 import SettingsMenu from "./SettingsMenu";
 import Mascot, { MascotState } from "./Mascot";
@@ -18,6 +19,13 @@ export default function Workspace() {
   const [input, setInput] = useState("");
   const [mode, setMode] = useState<ChatMode>("strict");
   const [normalizeQuery, setNormalizeQuery] = useState(true);
+  const [rightTab, setRightTab] = useState<"qa" | "skills">("qa");
+  const [focusSkill, setFocusSkill] = useState<string | null>(null);
+
+  const openSkill = (name: string) => {
+    setFocusSkill(name);
+    setRightTab("skills");
+  };
 
   // 384px = 320px (old fixed w-80) * 1.2 -- default 20% wider, then user-resizable.
   const [sidebarWidth, setSidebarWidth] = useState(384);
@@ -89,10 +97,12 @@ export default function Workspace() {
         related_topics: [],
         answer_source: "no_info",
         normalized_query: null,
+        skills: [],
         loading: true,
       },
     ]);
     setActiveId(id);
+    setRightTab("qa");
 
     try {
       const res = await fetch(`${API_URL}/chat`, {
@@ -112,6 +122,7 @@ export default function Workspace() {
                 related_topics: data.related_topics || [],
                 answer_source: data.answer_source || "no_info",
                 normalized_query: data.normalized_query || null,
+                skills: data.skills || [],
                 loading: false,
               }
             : t
@@ -161,8 +172,36 @@ export default function Workspace() {
           <div className="w-0.5 h-full mx-auto group-hover:bg-blue-400 dark:group-hover:bg-blue-500 transition-colors" />
         </div>
       </aside>
-      <main className="flex-1 min-w-0">
-        <AnswerPanel turn={activeTurn} onAskRelated={ask} />
+      <main className="flex-1 min-w-0 flex flex-col h-full">
+        <div className="shrink-0 flex gap-1 px-8 pt-4 border-b border-gray-200 dark:border-neutral-800">
+          <button
+            onClick={() => setRightTab("qa")}
+            className={`px-4 py-2 text-sm font-medium rounded-t-lg transition-colors ${
+              rightTab === "qa"
+                ? "bg-white dark:bg-neutral-900 text-gray-900 dark:text-neutral-100 ring-1 ring-b-0 ring-gray-200 dark:ring-neutral-700"
+                : "text-gray-500 dark:text-neutral-400 hover:text-gray-700 dark:hover:text-neutral-200"
+            }`}
+          >
+            Вопрос-ответ
+          </button>
+          <button
+            onClick={() => setRightTab("skills")}
+            className={`px-4 py-2 text-sm font-medium rounded-t-lg transition-colors ${
+              rightTab === "skills"
+                ? "bg-white dark:bg-neutral-900 text-gray-900 dark:text-neutral-100 ring-1 ring-b-0 ring-gray-200 dark:ring-neutral-700"
+                : "text-gray-500 dark:text-neutral-400 hover:text-gray-700 dark:hover:text-neutral-200"
+            }`}
+          >
+            Skills
+          </button>
+        </div>
+        <div className="flex-1 min-h-0">
+          {rightTab === "qa" ? (
+            <AnswerPanel turn={activeTurn} onAskRelated={ask} onOpenSkill={openSkill} />
+          ) : (
+            <SkillsPanel focusName={focusSkill} />
+          )}
+        </div>
       </main>
       <Mascot state={mascotState} />
     </div>

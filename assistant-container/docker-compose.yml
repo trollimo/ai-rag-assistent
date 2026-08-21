@@ -26,7 +26,7 @@ services:
     restart: unless-stopped
 
   assistant:
-    image: rag-offline:1.12.0
+    image: rag-offline:1.13.0
     build:
       context: .
       dockerfile: Dockerfile.offline
@@ -43,11 +43,18 @@ services:
       - "9081:9081"   # MCP server (Streamable HTTP /mcp + SSE /sse)
     volumes:
       - ../rag-generation/output/chroma_db:/data/chroma_db
+      - ../rag-generation/output/skills:/data/skills:ro
       - ./backend:/app/backend
       - ./entrypoint.sh:/app/entrypoint.sh
       # - ./backend/config/mcp-tools.yaml:/app/backend/config/mcp-tools.yaml  # раскомментировать для правки описания инструментов без пересборки
     environment:
       - RAG_DB_PATH=/data/chroma_db
+      - RAG_SKILLS_PATH=/data/skills
+      # Адрес, по которому ассистент виден снаружи -- подставляется в
+      # download_url для get_skill/list_skills (агент качает архив с машины
+      # разработчика, не изнутри контейнера). Поменять на реальный адрес,
+      # если ассистент не на localhost разработчика.
+      - PUBLIC_BASE_URL=http://localhost:8000
       # ── LLM connector ────────────────────────────────────────────
       # Local llm service by default. For a corporate model, point
       # LLM_BASE_URL at it and supply the key — the API shape is the same.

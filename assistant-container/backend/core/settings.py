@@ -44,3 +44,17 @@ REACTIONS_CONTRIBUTE_HINT = _cfg.get("reactions", {}).get(
     "contribute_hint",
     "Не нашли готовый ответ, но знаете его сами? Свяжитесь с командой базы знаний.",
 ).strip()
+
+# Where the generator writes skill archives + index.json (mounted read-only;
+# the assistant container has no source files of its own, see
+# rag-generation/docs/skills-architecture.md).
+RAG_SKILLS_PATH = Path(os.getenv("RAG_SKILLS_PATH", "/data/skills"))
+# Base URL the assistant is reachable at from a developer's machine -- baked
+# into download_url handed to MCP clients (get_skill/list_skills), since
+# those run outside the container and "localhost:8000" would resolve to
+# their own machine, not this one.
+PUBLIC_BASE_URL = os.getenv("PUBLIC_BASE_URL", "http://localhost:8000").rstrip("/")
+SKILLS_INSTALL_HINT = _cfg.get("skills", {}).get(
+    "install_hint",
+    "mkdir -p ~/.config/opencode/skills/{name} && curl -fsSL {download_url} -o /tmp/{name}.zip && unzip -o /tmp/{name}.zip -d ~/.config/opencode/skills/{name}",
+).strip()

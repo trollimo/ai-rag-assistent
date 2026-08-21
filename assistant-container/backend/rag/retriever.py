@@ -69,12 +69,18 @@ class Retriever:
             if rank > 0 and settings.MAX_DISTANCE is not None and dist > settings.MAX_DISTANCE:
                 dropped.append((meta["source"], dist))
                 continue
-            matches.append({
+            match = {
                 "text": doc,
                 "source": meta["source"],
                 "chunk": meta["chunk"],
                 "distance": dist,
-            })
+            }
+            if meta.get("is_skill"):
+                # Lets /chat surface "this answer touches an installable
+                # skill" without re-parsing chunk text -- see ingest.py's
+                # skills handling and skills_registry.py.
+                match["skill_name"] = meta.get("skill_name")
+            matches.append(match)
 
         if dropped:
             logger.debug("RAG search dropped %d results past max_distance=%s: %s",

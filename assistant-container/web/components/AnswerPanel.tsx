@@ -6,7 +6,13 @@ import { AnswerSource, Turn, topicLabel } from "./types";
 
 const API_URL = process.env.NEXT_PUBLIC_FASTAPI_URL || "http://localhost:8000";
 
-function CopyButton({ text }: { text: string }) {
+export function CopyButton({
+  text,
+  title = "Скопировать ответ для передачи ИИ-агенту (OpenCode и т.п.)",
+}: {
+  text: string;
+  title?: string;
+}) {
   const [copied, setCopied] = useState(false);
   return (
     <button
@@ -15,7 +21,7 @@ function CopyButton({ text }: { text: string }) {
         setCopied(true);
         setTimeout(() => setCopied(false), 1500);
       }}
-      title="Скопировать ответ для передачи ИИ-агенту (OpenCode и т.п.)"
+      title={title}
       className="shrink-0 flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-neutral-800 dark:text-neutral-300 dark:hover:bg-neutral-700 transition-colors"
     >
       <span>{copied ? "✅" : "📋"}</span>
@@ -146,9 +152,11 @@ const BADGE: Record<AnswerSource, { icon: string; label: string; className: stri
 export default function AnswerPanel({
   turn,
   onAskRelated,
+  onOpenSkill,
 }: {
   turn: Turn | null;
   onAskRelated: (question: string) => void;
+  onOpenSkill: (name: string) => void;
 }) {
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
 
@@ -255,6 +263,23 @@ export default function AnswerPanel({
                     ))}
                   </div>
                 ))}
+            </div>
+          )}
+
+          {!turn.loading && !turn.error && turn.skills.length > 0 && (
+            <div className="mt-4 pt-4 border-t border-gray-100 dark:border-neutral-800">
+              <span className="text-xs text-gray-400 dark:text-neutral-500">Про это есть устанавливаемый скилл:</span>
+              <div className="flex flex-wrap gap-1.5 mt-1.5">
+                {turn.skills.map((s) => (
+                  <button
+                    key={s.name}
+                    onClick={() => onOpenSkill(s.name)}
+                    className="text-xs px-2.5 py-1 rounded-full bg-purple-50 text-purple-700 hover:bg-purple-100 dark:bg-purple-950 dark:text-purple-300 dark:hover:bg-purple-900 transition-colors"
+                  >
+                    📦 {s.title}
+                  </button>
+                ))}
+              </div>
             </div>
           )}
 

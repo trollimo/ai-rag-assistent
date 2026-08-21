@@ -8,6 +8,7 @@ import yaml
 import chromadb
 from embedding_fn import MultilingualEmbeddingFunction
 from chunking import split_markdown, generate_manifest
+from skills import find_skill_roots, parse_skill_metadata, build_skill_archive
 
 logging.basicConfig(
     level=logging.INFO,
@@ -99,12 +100,63 @@ def main():
 
     docs, ids, metas = [], [], []
     source_names = []
+    skills_index = []  # populated only by type: skills sources
 
     for source in cfg["sources"]:
         source_dir = (BASE_DIR / source["path"]).resolve()
         if not source_dir.exists():
             log.warning("Source dir not found: %s", source_dir)
             continue
+
+        if source.get("type") == "skills":
+            skill_roots = find_skill_roots(source_dir)
+            if not skill_roots:
+                log.warning("No skill folders (with SKILL.md) in %s", source["path"])
+                continue
+            archive_cfg = source.get("archive", {})
+            skills_out_dir = BASE_DIR / "output" / "skills"
+            for skill_root in skill_roots:
+                meta = parse_skill_metadata(skill_root)
+                log.info("Skill '%s' (%s): %s", meta["name"], meta["version"], meta["description"][:80])
+
+                # RAG side: only the .md files, same chunker as everything else.
+                md_files = list(iter_md_files(skill_root, source.get("include")))
+                for file_path in md_files:
+                    text = file_path.read_text(encoding="utf-8-sig")
+                    chunks = split_markdown(
+                        text,
+                        max_chars=cfg["chunking"]["chunk_size"],
+                        overlap=cfg["chunking"]["overlap"],
+                    )
+                    for idx, chunk in enumerate(chunks):
+                        doc_id = f"{file_path.as_posix()}::{idx}"
+                        docs.append(chunk)
+                        ids.append(doc_id)
+                        metas.append({
+                            "source": file_path.as_posix(),
+                            "source_name": source["name"],
+                            "chunk": idx,
+                            # Lets the assistant recognize "this chunk belongs
+                            # to an installable skill" without re-parsing text.
+                            "is_skill": True,
+                            "skill_name": meta["name"],
+                            "skill_root": skill_root.relative_to(BASE_DIR).as_posix(),
+                        })
+                source_names.append(source["name"])
+
+                # Install side: the whole folder, zipped. Always rebuilt --
+                # these are small (single-digit MB), not worth the extra
+                # staleness-tracking complexity that bit prepare-offline-bundle.ps1.
+                dest_zip = skills_out_dir / f"{meta['name']}.zip"
+                archive_info = build_skill_archive(
+                    skill_root,
+                    exclude_patterns=archive_cfg.get("exclude", []),
+                    max_size_mb=archive_cfg.get("max_size_mb", 25),
+                    dest_zip=dest_zip,
+                )
+                skills_index.append({**meta, **archive_info, "archive": dest_zip.name})
+            continue
+
         files = list(iter_md_files(source_dir, source.get("include")))
         if not files:
             log.warning("No .md files in %s", source["path"])
@@ -179,6 +231,13 @@ def main():
     log.info("Done! %d chunks indexed (%d embedded, %d removed)",
              len(ids), len(to_embed), len(to_delete))
     log.info("Manifest: %s", manifest_path)
+
+    if skills_index:
+        skills_index_path = BASE_DIR / "output" / "skills" / "index.json"
+        skills_index_path.parent.mkdir(parents=True, exist_ok=True)
+        with open(skills_index_path, "w", encoding="utf-8") as f:
+            json.dump({"skills": skills_index}, f, indent=2, ensure_ascii=False)
+        log.info("Skills: %d archives built -> %s", len(skills_index), skills_index_path)
 
 
 if __name__ == "__main__":

@@ -1,5 +1,60 @@
 # Changelog
 
+## 1.13.0 (2026-08-21) — assistant-container
+
+### Added
+- Installable skills, end to end -- see `rag-generation/docs/skills-architecture.md`.
+  A skill is a folder with `SKILL.md` plus supporting files; the generator chunks its
+  `.md` files for RAG and zips the whole folder (minus `.git`/`.idea`/etc.) for installing
+  into a code agent. The assistant only mounts the generator's output read-only, it has
+  no source files of its own.
+- `GET /skills`, `GET /skills/{name}`, `GET /skills/{name}/archive`: catalog, metadata +
+  file list + install instructions, and the zip download. Names are validated against
+  `^[a-z0-9][a-z0-9._-]{0,63}$` and looked up in `index.json`, never path-joined from
+  user input.
+- MCP tools `list_skills` / `get_skill`: an agent gets a `download_url` + `sha256` +
+  install command rather than the archive bytes themselves (MCP tools return text; base64
+  would flood the agent's context with megabytes for a multi-file skill).
+- New `PUBLIC_BASE_URL` setting: `download_url` is only meaningful outside the container
+  (an MCP client runs on the developer's machine), so it can't be `localhost`.
+- `/chat` returns `skills: [{name, title, download_url}]`, derived structurally from
+  `is_skill`/`skill_name` metadata on the matched chunks -- no extra LLM call.
+- Web UI: the right panel is now two tabs, "Вопрос-ответ" and "Skills". The Skills tab
+  is a catalog with description/version/size and a download button; expanding a card
+  shows its file list and a copyable install snippet. Under an answer that touched a
+  skill, a "📦 title" chip switches to the Skills tab and opens that skill's card.
+
+### Fixed
+- `rag-generation`: default embedding batch size (256) tried to embed an entire
+  under-256-chunk to-embed set in one ONNX forward pass. Fine for the original small
+  corpus, but the 224-chunk skills batch (mostly java-performance-review, ~90 files)
+  OOM-killed the generator container (exit 137) inside Docker Desktop's ~6.7GB WSL2
+  limit, twice, silently -- no traceback, just a dead container after the last logged
+  line. Lowered the generator's default via `RAG_EMBED_BATCH_SIZE=32` in
+  `rag-generation/docker-compose.yml`, and confirmed the generator and assistant
+  containers must not run concurrently on this box regardless (documented in CLAUDE.md
+  backlog item #7) -- they compete for the same memory-capped VM.
+
+## 1.11.0 (2026-08-21) — rag-generation
+
+### Added
+- `skills.py` (new): skill detection (`find_skill_roots` -- immediate subfolders of a
+  `type: skills` source containing `SKILL.md`), tolerant metadata parsing (YAML
+  frontmatter when present, falling back to the first `#` heading / first real paragraph
+  / a plain `Version:` line -- `trollimo/java-performance-review-skill` has no frontmatter
+  at all), and `build_skill_archive` (zips the whole skill folder minus
+  `archive.exclude`, paths relative to the skill root so `SKILL.md` lands at the zip's own
+  root, content-hashed rather than zip-hashed since zip isn't timestamp-reproducible).
+- `rag-sources.yaml`: new `type: skills` source kind, with `archive.exclude` /
+  `archive.max_size_mb`. `ingest.py` chunks only each skill's `.md` files for RAG (tagged
+  `is_skill`/`skill_name`/`skill_root` in chunk metadata) and writes
+  `output/skills/index.json` + one zip per skill.
+- `docs/skills/`: three test skills of different shapes -- `java-performance-review`
+  (cloned from GitHub, no frontmatter, ~90 files across several subfolders, an HTML
+  template), `pr-checklist` (minimal, two files), `k8s-manifest-review` (frontmatter,
+  a shell script, a `references/` folder -- proves non-`.md` files land in the archive
+  but not in the vector index).
+
 ## 1.12.0 (2026-08-21) — assistant-container
 
 ### Added

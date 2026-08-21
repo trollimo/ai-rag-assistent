@@ -17,3 +17,10 @@ services:
     environment:
       - RAG_OUTPUT=/rag/output
       - HF_HUB_OFFLINE=1
+      # Default (256) tries to embed the whole to-embed set in one ONNX batch
+      # when it's under that size. Fine for the original small corpus, but a
+      # 224-chunk skills batch (many files from one large skill, e.g.
+      # java-performance-review) OOM-killed the container (exit 137) inside
+      # Docker Desktop's ~6.7GB WSL2 VM limit. Lower default keeps peak
+      # memory bounded regardless of how many chunks land in one run.
+      - RAG_EMBED_BATCH_SIZE=32

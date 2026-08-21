@@ -17,6 +17,20 @@ tools:
       Use this to understand what documentation is indexed, or to
       check if a specific topic (e.g. "Nexus") is present in the RAG.
 
+  list_skills:
+    description: >
+      List installable skills available in the knowledge base -- each
+      one is a self-contained folder (SKILL.md plus supporting files)
+      that can be downloaded as a zip and installed locally. Use this
+      to discover what skills exist before deciding whether to fetch one.
+
+  get_skill:
+    description: >
+      Get full metadata for one skill by name, including a download_url
+      for its archive, a sha256 to verify the download, and step-by-step
+      install instructions. Use search_docs or list_skills first to find
+      the skill's exact name.
+
 # ── Поиск (REST /search, MCP search_docs) ─────────────────────────
 search:
   default_top_k: 5    # сколько чанков возвращать по умолчанию
@@ -49,3 +63,15 @@ reactions:
     Не нашли готовый ответ, но знаете его сами? Самый быстрый способ
     пополнить базу — оформить Pull Request с новым .md-файлом в
     репозитории документации. Как именно — уточним отдельно.
+
+# ── Скиллы (REST /skills, MCP list_skills/get_skill) ──────────────
+skills:
+  # Шаблон инструкции по установке, отдаётся вместе с get_skill. {name} и
+  # {download_url} подставляются на сервере. Путь установки специфичен для
+  # OpenCode -- при поддержке другого агента текст здесь придётся расширить.
+  install_hint: >
+    mkdir -p ~/.config/opencode/skills/{name}
+
+    curl -fsSL {download_url} -o /tmp/{name}.zip
+
+    unzip -o /tmp/{name}.zip -d ~/.config/opencode/skills/{name}
