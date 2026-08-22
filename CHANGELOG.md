@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.13.1 (2026-08-21) — assistant-container
+
+### Added
+- `SkillsPanel.tsx`: search box, substring match against title/name and
+  description. Name/title hits are ranked before description-only hits
+  (stable sort, so ties keep the backend's original order).
+
 ## 1.13.0 (2026-08-21) — assistant-container
 
 ### Added

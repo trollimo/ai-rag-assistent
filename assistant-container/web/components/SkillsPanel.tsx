@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { CopyButton } from "./AnswerPanel";
 import { SkillDetail, SkillSummary } from "./types";
 
@@ -17,6 +17,26 @@ export default function SkillsPanel({ focusName }: { focusName: string | null })
   const [error, setError] = useState<string | null>(null);
   const [expanded, setExpanded] = useState<string | null>(null);
   const [details, setDetails] = useState<Record<string, SkillDetail>>({});
+  const [query, setQuery] = useState("");
+
+  // Substring match, name/title hits ranked before description-only hits.
+  // Array.sort is stable (spec'd since ES2019), so within each rank the
+  // original (backend) order is preserved rather than shuffled.
+  const filteredSkills = useMemo(() => {
+    if (!skills) return skills;
+    const q = query.trim().toLowerCase();
+    if (!q) return skills;
+    return skills
+      .map((s) => {
+        const nameHit = s.title.toLowerCase().includes(q) || s.name.toLowerCase().includes(q);
+        const descHit = (s.description || "").toLowerCase().includes(q);
+        const rank = nameHit ? 0 : descHit ? 1 : -1;
+        return { s, rank };
+      })
+      .filter((x) => x.rank !== -1)
+      .sort((a, b) => a.rank - b.rank)
+      .map((x) => x.s);
+  }, [skills, query]);
 
   useEffect(() => {
     fetch(`${API_URL}/skills`)
@@ -50,14 +70,27 @@ export default function SkillsPanel({ focusName }: { focusName: string | null })
           </p>
         </div>
 
+        {skills !== null && skills.length > 0 && (
+          <input
+            type="text"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Поиск по названию или описанию..."
+            className="w-full mb-4 border border-gray-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 text-gray-900 dark:text-neutral-100 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+          />
+        )}
+
         {error && <p className="text-sm text-red-500">{error}</p>}
         {!error && skills === null && <p className="text-sm text-gray-400 dark:text-neutral-500">Загрузка...</p>}
         {skills !== null && skills.length === 0 && (
           <p className="text-sm text-gray-400 dark:text-neutral-500">Скиллов в базе пока нет.</p>
         )}
+        {skills !== null && skills.length > 0 && filteredSkills?.length === 0 && (
+          <p className="text-sm text-gray-400 dark:text-neutral-500">Ничего не найдено по «{query}».</p>
+        )}
 
         <div className="space-y-3">
-          {skills?.map((s) => {
+          {filteredSkills?.map((s) => {
             const isOpen = expanded === s.name;
             const detail = details[s.name];
             return (
