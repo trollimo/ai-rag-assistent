@@ -1,5 +1,44 @@
 # Changelog
 
+## 1.15.0 (2026-08-24) — assistant-container + rag-generation
+
+### Added
+- Chroma server mode, **opt-in** (`CHROMA_MODE=server` + `--profile chroma`). The default
+  stays the embedded file client: server mode costs an extra container, volume, image to
+  ship into the closed network and a client/server version pairing, and it only pays for
+  itself once reindexing is automated. No data migration — verified that the server starts
+  on top of the existing `output/chroma_db` and picks up all 233 chunks as they are.
+  - **Caveat found in testing, and it limits the payoff:** on 1.5.9 chunks written while
+    the assistant runs land in storage (`count` and `/topics` see them) but do **not**
+    become searchable until the `chroma` container is restarted — waited 90s to rule out
+    lazy compaction, it does not resolve on its own. So reindexing is not seamless after
+    all; what it does buy is restarting `chroma` (~10-25s) instead of the assistant
+    (~2 min of embedding-model reload), and no folder-swapping. Documented in
+    `docs/modes.md` rather than glossed over — the feature was sold on "no downtime" and
+    that turned out to be "much less downtime".
+- One generator serves both modes. `PersistentClient` and `HttpClient` expose the same
+  `Collection` API, so only the client construction differs — a factory in
+  `rag/chroma_client.py` (assistant) and `src/chroma_client.py` (generator).
+- `docs/modes.md`: every configuration key in one place — LLM connection, Chroma mode,
+  search/prompt tuning, embeddings, skills, feedback — with what each switch actually
+  changes and a matrix of which profile to run for which task.
+
+### Fixed
+- **Concurrency: the shared embedding model was reachable from several threads at once.**
+  FastAPI runs plain `def` handlers (`/search`, `/topics`, `/skills`) in a threadpool, and
+  `/chat` hands its embedding to `asyncio.to_thread` — so one process-wide
+  `TextEmbedding` object was being driven concurrently, with non-atomic timing counters on
+  top. Embedding is now serialised by a lock. Not a throughput loss: ONNXRuntime already
+  spreads a single embed across every core, so concurrent embeds only contended for the
+  same CPU. Verified with four simultaneous requests from different clients — each got its
+  own answer with its own sources, no mixing.
+
+### Notes
+- Audited the rest of the request path for cross-client leakage while at it: `/chat` holds
+  no server-side session, conversation history lives in each browser's own React state,
+  `interaction_id` is a per-request UUID, and the MCP tools are stateless proxies to REST.
+  Nothing is shared between clients by construction.
+
 ## 1.14.0 (2026-08-22) — assistant-container
 
 ### Added

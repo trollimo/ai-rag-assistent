@@ -1,5 +1,6 @@
 import logging
 import os
+import threading
 import time
 
 from chromadb import EmbeddingFunction
@@ -40,6 +41,20 @@ class MultilingualEmbeddingFunction(EmbeddingFunction):
         self._use_prefixes = _env_flag("RAG_EMBED_E5_PREFIXES") and self._is_e5(model_name)
         self.total_embed_seconds = 0.0
         self.total_docs = 0
+        # One embedding at a time across the whole process.
+        #
+        # This object is a module-level singleton shared by every request, and
+        # it is reached from several threads at once: FastAPI runs plain `def`
+        # handlers (/search, /topics) in a threadpool, and /chat hands its
+        # embedding to asyncio.to_thread. Serialising is not a throughput loss
+        # -- ONNXRuntime already spreads one embed across all cores, so two
+        # concurrent embeds just contend for the same CPU. What it buys is the
+        # guarantee that concurrent users cannot interleave inside the shared
+        # model, and honest timing counters below.
+        #
+        # The event loop is NOT held while waiting here: /chat is inside
+        # to_thread, so other requests keep being served.
+        self._lock = threading.Lock()
         log.info(
             "Embedding model=%s threads=%s parallel=%s batch_size=%s e5_prefixes=%s cpu_count=%s",
             model_name, threads, self._parallel, self._batch_size, self._use_prefixes, os.cpu_count(),
@@ -50,11 +65,12 @@ class MultilingualEmbeddingFunction(EmbeddingFunction):
         return "e5" in model_name.lower()
 
     def _embed(self, texts):
-        t0 = time.perf_counter()
-        result = list(self.model.embed(texts, batch_size=self._batch_size, parallel=self._parallel))
-        elapsed = time.perf_counter() - t0
-        self.total_embed_seconds += elapsed
-        self.total_docs += len(texts)
+        with self._lock:
+            t0 = time.perf_counter()
+            result = list(self.model.embed(texts, batch_size=self._batch_size, parallel=self._parallel))
+            elapsed = time.perf_counter() - t0
+            self.total_embed_seconds += elapsed
+            self.total_docs += len(texts)
         log.info(
             "Embedded %d chunks in %.2fs (%.1f chunks/s)",
             len(texts), elapsed, len(texts) / elapsed if elapsed else 0,
@@ -69,4 +85,5 @@ class MultilingualEmbeddingFunction(EmbeddingFunction):
     def embed_query(self, text):
         """Embed a search query. Pass the result to Chroma as query_embeddings."""
         prefixed = self.QUERY_PREFIX + text if self._use_prefixes else text
-        return list(self.model.embed([prefixed], batch_size=1))[0]
+        with self._lock:
+            return list(self.model.embed([prefixed], batch_size=1))[0]

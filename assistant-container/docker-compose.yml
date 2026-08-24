@@ -26,7 +26,7 @@ services:
     restart: unless-stopped
 
   assistant:
-    image: rag-offline:1.14.0
+    image: rag-offline:1.15.0
     build:
       context: .
       dockerfile: Dockerfile.offline
@@ -50,6 +50,15 @@ services:
     environment:
       - RAG_DB_PATH=/data/chroma_db
       - RAG_SKILLS_PATH=/data/skills
+      # ── Chroma ───────────────────────────────────────────────────
+      # file (по умолчанию) — читать индекс напрямую из тома.
+      # server — ходить в контейнер chroma; тогда генератор может
+      # дописывать чанки, не останавливая ассистента:
+      #   docker compose --profile chroma up -d
+      # и здесь же CHROMA_MODE=server. Подробнее — docs/modes.md.
+      - CHROMA_MODE=${CHROMA_MODE:-file}
+      - CHROMA_HOST=chroma
+      - CHROMA_PORT=8000
       # Адрес, по которому ассистент виден снаружи -- подставляется в
       # download_url для get_skill/list_skills (агент качает архив с машины
       # разработчика, не изнутри контейнера). Поменять на реальный адрес,
@@ -78,6 +87,40 @@ services:
       - ADMIN_TOKEN=${ADMIN_TOKEN:-}
     depends_on:
       - llm
+    restart: unless-stopped
+
+  # Chroma в серверном режиме. Под профилем: обычный `docker compose up` его
+  # НЕ поднимает, ассистент читает индекс из тома напрямую (CHROMA_MODE=file).
+  # Включить:  CHROMA_MODE=server docker compose --profile chroma up -d
+  #
+  # Порт проброшен на хост, потому что генератор живёт в ДРУГОМ compose-проекте
+  # со своей сетью: он подключается по localhost:8001. Иначе пришлось бы
+  # заводить общую внешнюю сеть -- лишний шаг при запуске.
+  #
+  # Тег версии зафиксирован намеренно: рассинхрон версий клиента (chromadb в
+  # requirements.txt) и сервера даёт неочевидные ошибки на ровном месте.
+  chroma:
+    image: chromadb/chroma:1.5.9
+    profiles: ["chroma"]
+    container_name: rag-chroma
+    ports:
+      - "8001:8000"
+    volumes:
+      # Тот же формат на диске, что и у встроенного режима -- существующий
+      # индекс подхватывается как есть, миграция не нужна.
+      - ../rag-generation/output/chroma_db:/data
+    environment:
+      - IS_PERSISTENT=TRUE
+      - PERSIST_DIRECTORY=/data
+      - ANONYMIZED_TELEMETRY=FALSE
+    # healthcheck намеренно нет: образ 1.5.x минималистичный, внутри только
+    # бинарь chroma -- ни curl, ни wget, ни python. Проверка, которая всегда
+    # рапортует "unhealthy", хуже отсутствующей. Снаружи живость видна по
+    # http://localhost:8001/api/v2/heartbeat.
+    #
+    # depends_on со стороны ассистента тоже нет: chroma под профилем, а
+    # зависимость на сервис вне активного профиля ломает обычный
+    # `docker compose up`.
     restart: unless-stopped
 
   # Хранилище обратной связи. Под профилем: обычный `docker compose up` его НЕ

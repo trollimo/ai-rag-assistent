@@ -5,7 +5,7 @@ import time
 from pathlib import Path
 import json
 import yaml
-import chromadb
+from chroma_client import build_client
 from embedding_fn import MultilingualEmbeddingFunction
 from chunking import split_markdown, generate_manifest
 from skills import find_skill_roots, parse_skill_metadata, build_skill_archive
@@ -88,8 +88,9 @@ def iter_md_files(root, patterns):
 
 def main():
     cfg = load_config()
-    client = chromadb.PersistentClient(
-        path=str((BASE_DIR / cfg["storage"]["path"]).resolve())
+    client = build_client(
+        cfg.get("storage", {}),
+        (BASE_DIR / cfg["storage"]["path"]).resolve(),
     )
     model_name = cfg.get("embeddings", {}).get("model", MultilingualEmbeddingFunction.DEFAULT_MODEL)
     embedding_func = MultilingualEmbeddingFunction(model_name=model_name)

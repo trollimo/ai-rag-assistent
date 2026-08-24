@@ -1,6 +1,6 @@
 import logging
 
-import chromadb
+from backend.rag.chroma_client import build_client
 from backend.rag.embedding_fn import MultilingualEmbeddingFunction
 from backend.core import settings
 
@@ -9,7 +9,10 @@ logger = logging.getLogger("backend.rag")
 
 class Retriever:
     def __init__(self):
-        self.client = chromadb.PersistentClient(path=str(settings.RAG_DB_PATH))
+        self.client = build_client(
+            settings.CHROMA_MODE, settings.RAG_DB_PATH,
+            settings.CHROMA_HOST, settings.CHROMA_PORT, settings.CHROMA_SSL,
+        )
         self.embedding_func = MultilingualEmbeddingFunction(model_name=settings.EMBEDDINGS_MODEL)
         self.collection = self.client.get_or_create_collection(
             name=settings.COLLECTION_NAME,
