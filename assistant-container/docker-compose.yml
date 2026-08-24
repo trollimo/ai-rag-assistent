@@ -26,7 +26,7 @@ services:
     restart: unless-stopped
 
   assistant:
-    image: rag-offline:1.13.1
+    image: rag-offline:1.14.0
     build:
       context: .
       dockerfile: Dockerfile.offline
@@ -46,7 +46,7 @@ services:
       - ../rag-generation/output/skills:/data/skills:ro
       - ./backend:/app/backend
       - ./entrypoint.sh:/app/entrypoint.sh
-      # - ./backend/config/mcp-tools.yaml:/app/backend/config/mcp-tools.yaml  # раскомментировать для правки описания инструментов без пересборки
+      # - ./backend/config/mcp-tools.yaml:/app/backend/config/mcp-tools.yaml  # раскомментировать для правки конфига (в т.ч. feedback.enabled) без пересборки
     environment:
       - RAG_DB_PATH=/data/chroma_db
       - RAG_SKILLS_PATH=/data/skills
@@ -70,6 +70,43 @@ services:
       - MCP_SERVER_URL=http://localhost:9081/mcp
       # - MCP_SERVER_URL=http://mcp-service.rag-namespace.svc.cluster.local:9081/mcp  # для Kubernetes
       - NEXT_PUBLIC_FASTAPI_URL=http://localhost:8000
+      # ── Обратная связь ───────────────────────────────────────────
+      # Включается в backend/config/mcp-tools.yaml (feedback.enabled).
+      # Postgres поднимается только с профилем: docker compose --profile feedback up -d
+      - FEEDBACK_DB_URL=postgresql+psycopg://rag:rag@feedback-db:5432/rag_feedback
+      # Пустой токен = админ-API выключен целиком (а не открыт всем).
+      - ADMIN_TOKEN=${ADMIN_TOKEN:-}
     depends_on:
       - llm
     restart: unless-stopped
+
+  # Хранилище обратной связи. Под профилем: обычный `docker compose up` его НЕ
+  # поднимает, ассистент работает без БД (feedback.enabled: false).
+  # Включить:  docker compose --profile feedback up -d
+  #
+  # Намеренно без depends_on со стороны ассистента: тот обязан переживать
+  # отсутствие БД в любом случае (иначе упавший Postgres утащил бы за собой
+  # весь контейнер через `wait -n` в entrypoint.sh).
+  feedback-db:
+    image: postgres:16-alpine
+    profiles: ["feedback"]
+    container_name: rag-feedback-db
+    environment:
+      - POSTGRES_USER=rag
+      - POSTGRES_PASSWORD=rag
+      - POSTGRES_DB=rag_feedback
+    ports:
+      - "5432:5432"
+    volumes:
+      # Единственные невосстановимые данные в системе: chroma_db и архивы
+      # скиллов пересобираются из исходников, обратная связь -- нет.
+      - feedback-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U rag -d rag_feedback"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+volumes:
+  feedback-db-data:

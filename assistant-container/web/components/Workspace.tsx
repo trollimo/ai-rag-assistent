@@ -4,10 +4,11 @@ import { useEffect, useRef, useState } from "react";
 import ChatSidebar from "./ChatSidebar";
 import AnswerPanel from "./AnswerPanel";
 import SkillsPanel from "./SkillsPanel";
+import RequestsPanel from "./RequestsPanel";
 import TopicsPanel from "./TopicsPanel";
 import SettingsMenu from "./SettingsMenu";
 import Mascot, { MascotState } from "./Mascot";
-import { ChatMode, Turn } from "./types";
+import { ChatMode, Turn, UiConfig, getClientId } from "./types";
 
 const API_URL = process.env.NEXT_PUBLIC_FASTAPI_URL || "http://localhost:8000";
 
@@ -19,8 +20,24 @@ export default function Workspace() {
   const [input, setInput] = useState("");
   const [mode, setMode] = useState<ChatMode>("strict");
   const [normalizeQuery, setNormalizeQuery] = useState(true);
-  const [rightTab, setRightTab] = useState<"qa" | "skills">("qa");
+  const [rightTab, setRightTab] = useState<"qa" | "skills" | "requests">("qa");
   const [focusSkill, setFocusSkill] = useState<string | null>(null);
+
+  // Optional features are hidden, not disabled, when the backend says they
+  // are off -- see /ui/config. Defaults are "off" so nothing flashes into
+  // view before the config arrives.
+  const [uiConfig, setUiConfig] = useState<UiConfig>({
+    feedback_enabled: false,
+    showcase_enabled: false,
+    contribute_hint: "",
+  });
+
+  useEffect(() => {
+    fetch(`${API_URL}/ui/config`)
+      .then((r) => r.json())
+      .then((d) => setUiConfig(d))
+      .catch(() => {});
+  }, []);
 
   const openSkill = (name: string) => {
     setFocusSkill(name);
@@ -98,6 +115,7 @@ export default function Workspace() {
         answer_source: "no_info",
         normalized_query: null,
         skills: [],
+        interaction_id: null,
         loading: true,
       },
     ]);
@@ -108,7 +126,12 @@ export default function Workspace() {
       const res = await fetch(`${API_URL}/chat`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ question, mode, normalize_query: normalizeQuery }),
+        body: JSON.stringify({
+          question,
+          mode,
+          normalize_query: normalizeQuery,
+          client_id: getClientId(),
+        }),
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
@@ -123,6 +146,7 @@ export default function Workspace() {
                 answer_source: data.answer_source || "no_info",
                 normalized_query: data.normalized_query || null,
                 skills: data.skills || [],
+                interaction_id: data.interaction_id || null,
                 loading: false,
               }
             : t
@@ -194,13 +218,31 @@ export default function Workspace() {
           >
             Skills
           </button>
+          {uiConfig.showcase_enabled && (
+            <button
+              onClick={() => setRightTab("requests")}
+              className={`px-4 py-2 text-sm font-medium rounded-t-lg transition-colors ${
+                rightTab === "requests"
+                  ? "bg-white dark:bg-neutral-900 text-gray-900 dark:text-neutral-100 ring-1 ring-b-0 ring-gray-200 dark:ring-neutral-700"
+                  : "text-gray-500 dark:text-neutral-400 hover:text-gray-700 dark:hover:text-neutral-200"
+              }`}
+            >
+              Запросы
+            </button>
+          )}
         </div>
         <div className="flex-1 min-h-0">
-          {rightTab === "qa" ? (
-            <AnswerPanel turn={activeTurn} onAskRelated={ask} onOpenSkill={openSkill} />
-          ) : (
-            <SkillsPanel focusName={focusSkill} />
+          {rightTab === "qa" && (
+            <AnswerPanel
+              turn={activeTurn}
+              onAskRelated={ask}
+              onOpenSkill={openSkill}
+              feedbackEnabled={uiConfig.feedback_enabled}
+              contributeHint={uiConfig.contribute_hint}
+            />
           )}
+          {rightTab === "skills" && <SkillsPanel focusName={focusSkill} />}
+          {rightTab === "requests" && <RequestsPanel />}
         </div>
       </main>
       <Mascot state={mascotState} />

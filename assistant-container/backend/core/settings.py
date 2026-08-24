@@ -58,3 +58,33 @@ SKILLS_INSTALL_HINT = _cfg.get("skills", {}).get(
     "install_hint",
     "mkdir -p ~/.config/opencode/skills/{name} && curl -fsSL {download_url} -o /tmp/{name}.zip && unzip -o /tmp/{name}.zip -d ~/.config/opencode/skills/{name}",
 ).strip()
+
+# ── Feedback module ───────────────────────────────────────────────
+# Master switch. When off, no database is touched at all (not even a
+# connection attempt), the reaction buttons and the showcase tab are hidden,
+# and the assistant behaves exactly as it did before this module existed --
+# see docs/feedback-architecture.md. Deployments without a Postgres stay on
+# the old path rather than running a degraded version of the new one.
+_fb = _cfg.get("feedback", {})
+FEEDBACK_ENABLED = bool(_fb.get("enabled", False))
+# Log every interaction, not just the ones that got a reaction. Off means
+# nothing reaches disk until a human actually presses a button.
+FEEDBACK_LOG_QUESTIONS = bool(_fb.get("log_questions", True))
+FEEDBACK_REDACT = bool(_fb.get("redact", True))
+FEEDBACK_SHOWCASE = bool(_fb.get("showcase", True))
+FEEDBACK_PUBLISH_THRESHOLD = int(_fb.get("publish_threshold", 2))
+FEEDBACK_CLUSTER_INTERVAL_MINUTES = int(_fb.get("cluster_interval_minutes", 10))
+FEEDBACK_CLUSTER_MAX_DISTANCE = float(_fb.get("cluster_max_distance", 180))
+# The token itself lives in the environment, never in the yaml -- the yaml is
+# committed, bind-mounted and shown in docs. Empty token disables /admin/*.
+ADMIN_TOKEN = os.getenv(_fb.get("admin_token_env", "ADMIN_TOKEN"), "")
+
+# Postgres connection. Only read when FEEDBACK_ENABLED.
+FEEDBACK_DB_URL = os.getenv(
+    "FEEDBACK_DB_URL",
+    "postgresql+psycopg://rag:rag@feedback-db:5432/rag_feedback",
+)
+# Answers are a few KB at most; this only bounds abuse. Deliberately not the
+# ~1000 chars first considered -- truncating that hard throws away exactly the
+# context someone needs later to work out what went wrong.
+FEEDBACK_MAX_TEXT = 8000

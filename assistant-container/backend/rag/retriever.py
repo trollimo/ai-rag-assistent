@@ -25,7 +25,19 @@ class Retriever:
             logger.info("Retriever ready db=%s collection=%s — empty",
                          settings.RAG_DB_PATH, settings.COLLECTION_NAME)
 
-    def search(self, query: str, top_k: int = 5, source_filter: str | None = None, path_filter: str | None = None):
+    def embed_query(self, query: str):
+        """Embed a search query once so callers can reuse the vector.
+
+        Worth exposing: /chat runs retrieval twice on the common path (a
+        second pass filtered to the dominant source), and each pass used to
+        re-embed the same text -- ~1-2s of CPU per call on this hardware.
+        The feedback module needs the same vector again to cluster
+        unanswered questions, which would have been a third.
+        """
+        return self.embedding_func.embed_query(query)
+
+    def search(self, query: str, top_k: int = 5, source_filter: str | None = None,
+               path_filter: str | None = None, query_vector=None):
         logger.debug("RAG search query=%s top_k=%d source_filter=%s path_filter=%s", query, top_k, source_filter, path_filter)
         where = {}
         if source_filter:
@@ -44,7 +56,7 @@ class Retriever:
             where_clause = {"$and": [{k: v} for k, v in where.items()]} if len(where) > 1 else where
         # Embed the query ourselves so the e5 "query:" prefix is applied —
         # query_texts would route through __call__, which prefixes documents.
-        query_vec = self.embedding_func.embed_query(query)
+        query_vec = query_vector if query_vector is not None else self.embedding_func.embed_query(query)
         result = self.collection.query(
             query_embeddings=[query_vec], n_results=top_k, where=where_clause
         )

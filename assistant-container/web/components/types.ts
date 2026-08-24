@@ -16,9 +16,37 @@ export type Turn = {
   answer_source: AnswerSource;
   normalized_query?: string | null;
   skills: SkillHit[];
+  interaction_id?: string | null;
   loading: boolean;
   error?: string;
 };
+
+export type UiConfig = {
+  feedback_enabled: boolean;
+  showcase_enabled: boolean;
+  contribute_hint: string;
+};
+
+export type ShowcaseTopic = {
+  id: number;
+  title: string;
+  status: string;
+  question_count: number;
+  vote_count: number;
+  resolution?: string | null;
+  voted: boolean;
+};
+
+/** Anonymous per-browser id: groups one person's activity without naming them. */
+export function getClientId(): string {
+  if (typeof window === "undefined") return "";
+  let id = localStorage.getItem("clientId");
+  if (!id) {
+    id = (crypto.randomUUID?.() as string) || `c-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    localStorage.setItem("clientId", id);
+  }
+  return id;
+}
 
 export type SkillSummary = {
   name: string;

@@ -1,5 +1,72 @@
 # Changelog
 
+## 1.14.0 (2026-08-22) — assistant-container
+
+### Added
+- Persistent feedback module — full design in `docs/feedback-architecture.md`.
+  **Off by default** (`feedback.enabled: false` in `mcp-tools.yaml`): no database is
+  touched, the reaction buttons and the "Запросы" tab are hidden, and the assistant
+  behaves exactly as it did before. A deployment without Postgres should look like the
+  feature was never built, not like it is broken.
+- `interactions` + `feedback` tables in Postgres (`feedback-db` service, behind the
+  `feedback` compose profile so a plain `docker compose up` never starts it). Deliberately
+  no `depends_on` from the assistant: the entrypoint runs everything under `wait -n`, so a
+  hard dependency would let a failed database take the whole container down.
+- `POST /feedback` wired to the three reaction buttons, which were UI-only stubs until now.
+  The server is the source of truth: `/chat` returns an `interaction_id` and stores what it
+  actually did, so a reaction is a tiny `{interaction_id, kind, comment}` rather than the
+  browser posting question/answer/sources back (forgeable, bulky, drifts from reality).
+- `feedback.log_questions` toggle. On, every interaction is logged — which is what makes
+  gap analysis possible at all, since a question the base could not answer and after which
+  the person silently left is invisible to any button. Off, an interaction is parked in a
+  bounded in-memory cache and only reaches disk if a human actually reacts to it.
+- Secret redaction (`core/redaction.py`) applied before anything is written. People paste
+  connection strings into questions; typed placeholders (`[PASSWORD]`, `[TOKEN]`) keep the
+  sentence readable while a secret that was never written to disk cannot leak from it.
+- Public showcase tab "Запросы": unanswered questions clustered into topics and voted on,
+  to rank what to add to the knowledge base first. Clustering reuses the query vector
+  already computed during `/chat` (no extra inference); the LLM only writes the topic
+  title, once per cluster, under instructions never to carry over concrete values. Raw user
+  text is never published — only that generated title, capped at 90 characters.
+  A topic goes public only after `publish_threshold` (default 2) distinct people hit it.
+- `/admin/*` behind a shared `ADMIN_TOKEN` header: feedback triage, topic
+  publish/hide/resolve, stats, manual clustering run. An unset token disables the admin API
+  outright rather than leaving it open.
+
+### Changed
+- `/chat` embeds the query once and reuses the vector for both retrieval passes. The
+  dominant-source path used to re-embed the same text a second time — ~1-2s of wasted CPU
+  per question on this hardware. The embedding call also moved off the event loop
+  (`asyncio.to_thread`), addressing CLAUDE.md backlog item #8.
+- No fourth "я не нашёл ответ" button: the server already knows that case from
+  `answer_source`, so the 👎 button re-words itself to "В базе этого нет" instead, and the
+  gap report builds itself without anyone pressing anything.
+
+### Fixed
+- Feedback database connection now retries in the background instead of giving up after
+  one attempt. The assistant deliberately has no `depends_on` for it, so `docker compose
+  --profile feedback up` regularly starts the assistant before Postgres accepts
+  connections — without the retry, a startup race silently decided whether the whole
+  module worked until someone restarted the container. Caught in testing, where exactly
+  that happened.
+- Schema bootstrap split `schema.sql` on `;` with a comment claiming that was "safe here
+  since the file is ours" — it was not. A prose SQL comment containing a semicolon
+  ("-- One vote per answer; …") got cut in half and its tail handed to the server as SQL.
+  Line comments are now stripped before splitting.
+- `prepare-offline-bundle.ps1` skipped downloading Python wheels whenever the cache
+  directory was non-empty, regardless of whether `requirements.txt` had changed. Adding a
+  dependency left it missing from the offline bundle, and the Docker build quietly reached
+  PyPI instead — which only works on a machine with internet, exactly what the bundle
+  exists to avoid needing. Now refreshes when `requirements.txt` is newer than the cache.
+- `prepare-offline-bundle.ps1` had never produced a usable offline wheel set at all.
+  `onnxruntime` (pulled in by fastembed) publishes no `manylinux2014` wheel, so asking pip
+  for that single platform tag failed the whole resolution; the fallback then re-ran
+  `pip download --no-deps` with no `--platform` at all and filled the bundle with **Windows**
+  wheels. Nobody noticed because the Docker build has internet and silently fetched the
+  real ones from PyPI — on a closed network it would simply not build. Now passes several
+  manylinux tags (6 wheels → 95, the actual dependency closure), purges non-Linux wheels
+  from the cache, and fails loudly instead of falling back to something broken.
+
 ## 1.13.1 (2026-08-21) — assistant-container
 
 ### Added

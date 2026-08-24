@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import ReactMarkdown from "react-markdown";
-import { AnswerSource, Turn, topicLabel } from "./types";
+import { AnswerSource, Turn, getClientId, topicLabel } from "./types";
 
 const API_URL = process.env.NEXT_PUBLIC_FASTAPI_URL || "http://localhost:8000";
 
@@ -32,13 +32,30 @@ export function CopyButton({
 
 type Reaction = "up" | "down" | null;
 
-function ReactionBar({ turn }: { turn: Turn }) {
+async function postFeedback(body: Record<string, unknown>): Promise<boolean> {
+  try {
+    const res = await fetch(`${API_URL}/feedback`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ...body, client_id: getClientId() }),
+    });
+    if (!res.ok) return false;
+    const data = await res.json();
+    return Boolean(data.stored);
+  } catch {
+    return false;
+  }
+}
+
+function ReactionBar({ turn, contributeHint }: { turn: Turn; contributeHint: string }) {
   const [reaction, setReaction] = useState<Reaction>(null);
   const [showFeedback, setShowFeedback] = useState(false);
   const [feedback, setFeedback] = useState("");
   const [feedbackSent, setFeedbackSent] = useState(false);
   const [showContribute, setShowContribute] = useState(false);
-  const [contributeHint, setContributeHint] = useState<string | null>(null);
+  const [contribution, setContribution] = useState("");
+  const [contributionSent, setContributionSent] = useState(false);
+  const [failed, setFailed] = useState(false);
 
   useEffect(() => {
     // Reset per-turn UI state when switching between turns in the sidebar.
@@ -47,23 +64,50 @@ function ReactionBar({ turn }: { turn: Turn }) {
     setFeedback("");
     setFeedbackSent(false);
     setShowContribute(false);
+    setContribution("");
+    setContributionSent(false);
+    setFailed(false);
   }, [turn.id]);
 
-  const openContribute = () => {
-    setShowContribute((v) => !v);
-    if (!contributeHint) {
-      fetch(`${API_URL}/reactions/config`)
-        .then((r) => r.json())
-        .then((d) => setContributeHint(d.contribute_hint))
-        .catch(() => setContributeHint("Не удалось загрузить подсказку."));
-    }
+  // Nothing was retrieved, so "не то" would be misleading -- there is no
+  // "то" to reject. The server already knows this case (answer_source), so
+  // the wording adapts instead of adding a fourth button for it.
+  const nothingFound = turn.answer_source === "no_info" || turn.answer_source === "llm_knowledge";
+
+  const vote = async (kind: "up" | "down") => {
+    const next = reaction === kind ? null : kind;
+    setReaction(next);
+    setShowFeedback(next === "down");
+    if (!next) return;
+    const ok = await postFeedback({ interaction_id: turn.interaction_id, kind });
+    setFailed(!ok);
+  };
+
+  const sendComment = async () => {
+    const ok = await postFeedback({
+      interaction_id: turn.interaction_id,
+      kind: "down",
+      comment: feedback,
+    });
+    setFailed(!ok);
+    setFeedbackSent(true);
+  };
+
+  const sendContribution = async () => {
+    const ok = await postFeedback({
+      interaction_id: turn.interaction_id,
+      kind: "contribute",
+      comment: contribution,
+    });
+    setFailed(!ok);
+    setContributionSent(true);
   };
 
   return (
     <div className="mt-2">
       <div className="flex flex-wrap gap-2">
         <button
-          onClick={() => setReaction(reaction === "up" ? null : "up")}
+          onClick={() => vote("up")}
           className={`flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full transition-colors ${
             reaction === "up"
               ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300"
@@ -73,21 +117,17 @@ function ReactionBar({ turn }: { turn: Turn }) {
           👍 Ответ подошёл
         </button>
         <button
-          onClick={() => {
-            const next = reaction === "down" ? null : "down";
-            setReaction(next);
-            setShowFeedback(next === "down");
-          }}
+          onClick={() => vote("down")}
           className={`flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full transition-colors ${
             reaction === "down"
               ? "bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-300"
               : "bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-neutral-800 dark:text-neutral-300 dark:hover:bg-neutral-700"
           }`}
         >
-          👎 Не то
+          {nothingFound ? "👎 В базе этого нет" : "👎 Не то"}
         </button>
         <button
-          onClick={openContribute}
+          onClick={() => setShowContribute((v) => !v)}
           className={`flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full transition-colors ${
             showContribute
               ? "bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300"
@@ -98,21 +138,35 @@ function ReactionBar({ turn }: { turn: Turn }) {
         </button>
       </div>
 
+      {failed && (
+        <p className="mt-2 text-xs text-amber-600 dark:text-amber-400">
+          Не удалось сохранить обратную связь — хранилище недоступно.
+        </p>
+      )}
+
       {showFeedback && (
         <div className="mt-2 text-xs bg-gray-50 dark:bg-neutral-800 rounded-lg p-3">
           {feedbackSent ? (
             <p className="text-gray-500 dark:text-neutral-400">Спасибо, учтём.</p>
           ) : (
             <>
-              <p className="text-gray-500 dark:text-neutral-400 mb-2">Что не так с ответом? (необязательно)</p>
+              <p className="text-gray-500 dark:text-neutral-400 mb-2">
+                {nothingFound
+                  ? "Что вы искали? Это поможет понять, чего не хватает в базе."
+                  : "Что не так с ответом? (необязательно)"}
+              </p>
               <textarea
                 value={feedback}
                 onChange={(e) => setFeedback(e.target.value)}
-                placeholder="Неверный источник, устаревшая информация..."
+                placeholder={
+                  nothingFound
+                    ? "Хотел найти инструкцию по..."
+                    : "Неверный источник, устаревшая информация..."
+                }
                 className="w-full h-14 text-xs border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-blue-400"
               />
               <button
-                onClick={() => setFeedbackSent(true)}
+                onClick={sendComment}
                 className="mt-1.5 text-xs px-2.5 py-1 rounded-full bg-blue-600 text-white hover:bg-blue-700"
               >
                 Отправить
@@ -123,8 +177,29 @@ function ReactionBar({ turn }: { turn: Turn }) {
       )}
 
       {showContribute && (
-        <div className="mt-2 text-xs bg-gray-50 dark:bg-neutral-800 rounded-lg p-3 text-gray-600 dark:text-neutral-300">
-          {contributeHint || "Загрузка..."}
+        <div className="mt-2 text-xs bg-gray-50 dark:bg-neutral-800 rounded-lg p-3">
+          {contributionSent ? (
+            <p className="text-gray-500 dark:text-neutral-400">
+              Спасибо! Передадим команде базы знаний.
+            </p>
+          ) : (
+            <>
+              <p className="text-gray-600 dark:text-neutral-300 mb-2">{contributeHint}</p>
+              <textarea
+                value={contribution}
+                onChange={(e) => setContribution(e.target.value)}
+                placeholder="Правильный ответ или где его посмотреть..."
+                className="w-full h-20 text-xs border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-blue-400"
+              />
+              <button
+                onClick={sendContribution}
+                disabled={!contribution.trim()}
+                className="mt-1.5 text-xs px-2.5 py-1 rounded-full bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50"
+              >
+                Отправить
+              </button>
+            </>
+          )}
         </div>
       )}
     </div>
@@ -153,10 +228,14 @@ export default function AnswerPanel({
   turn,
   onAskRelated,
   onOpenSkill,
+  feedbackEnabled,
+  contributeHint,
 }: {
   turn: Turn | null;
   onAskRelated: (question: string) => void;
   onOpenSkill: (name: string) => void;
+  feedbackEnabled: boolean;
+  contributeHint: string;
 }) {
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
 
@@ -285,7 +364,14 @@ export default function AnswerPanel({
 
           {!turn.loading && !turn.error && (
             <div className="mt-4 pt-4 border-t border-gray-100 dark:border-neutral-800 flex items-start justify-between gap-3">
-              <ReactionBar turn={turn} />
+              {/* Reactions vanish entirely when the module is off -- a
+                  deployment without a database should not show buttons
+                  that quietly do nothing. */}
+              {feedbackEnabled ? (
+                <ReactionBar turn={turn} contributeHint={contributeHint} />
+              ) : (
+                <span />
+              )}
               <CopyButton text={turn.answer} />
             </div>
           )}

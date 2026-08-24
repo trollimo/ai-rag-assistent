@@ -116,6 +116,42 @@ VERSION
 почему так) — в [`rag-generation/docs/skills-architecture.md`](../rag-generation/docs/skills-architecture.md).
 Как добавить новый скилл — в [`rag-generation/README.md`](../rag-generation/README.md#скиллы-installable-skills).
 
+## Обратная связь (опционально)
+
+**По умолчанию выключено** — ассистент работает без всякой БД. Включается в
+`backend/config/mcp-tools.yaml`:
+
+```yaml
+feedback:
+  enabled: true          # мастер-выключатель модуля
+  log_questions: true    # писать все взаимодействия, а не только оценённые
+  showcase: true         # публичная вкладка «Запросы»
+```
+
+Хранилище поднимается отдельным профилем — обычный `docker compose up` его не
+трогает:
+
+```powershell
+docker compose --profile feedback up -d
+```
+
+| Что | Где |
+|---|---|
+| Реакции 👍 / 👎 / 💡 | под ответом (скрыты при `enabled: false`) |
+| Витрина непокрытых тем с голосованием | вкладка «Запросы» |
+| Триаж, публикация тем, статистика | `/admin/*`, заголовок `X-Admin-Token` |
+
+`ADMIN_TOKEN` задаётся переменной окружения; пустой токен **выключает** админ-API,
+а не открывает его всем.
+
+Что попадает на диск: вопросы и комментарии проходят чистку секретов (пароли в
+строках подключения, токены, ключи заменяются на `[PASSWORD]`, `[TOKEN]` и т.п.)
+**до** записи. Наружу, в публичную витрину, текст человека не выходит вовсе —
+только обобщённый заголовок темы, сгенерированный LLM.
+
+Подробности и обоснование решений — в
+[`docs/feedback-architecture.md`](../docs/feedback-architecture.md).
+
 ## Opencode Integration
 
 Для подключения opencode к MCP-серверу создай в корне проекта `.opencode.json`:
