@@ -45,6 +45,14 @@ chunking:
 
 storage:
   type: chromadb
+  # file   — писать SQLite-индекс напрямую (по умолчанию). Нельзя, пока
+  #          индекс держит запущенный ассистент: конфликт блокировок.
+  # server — писать в контейнер chroma по HTTP. Тогда переиндексация не
+  #          требует остановки ассистента (см. docs/modes.md).
+  # Переопределяется переменными RAG_CHROMA_MODE / RAG_CHROMA_HOST / RAG_CHROMA_PORT.
+  mode: file
+  host: localhost
+  port: 8001
   path: ./output/chroma_db
   collection: knowledge_base
 

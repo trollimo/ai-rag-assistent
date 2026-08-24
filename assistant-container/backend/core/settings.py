@@ -13,6 +13,15 @@ def _load_rag_config() -> dict:
 _cfg = _load_rag_config()
 
 RAG_DB_PATH = Path(os.getenv("RAG_DB_PATH", "/data/chroma_db"))
+# "file" (default) opens the index directly; "server" talks to a separate
+# chroma container. See backend/rag/chroma_client.py and docs/modes.md --
+# file mode stays the default because server mode costs an extra container,
+# volume and image to ship, and only pays for itself once reindexing runs
+# without stopping the assistant.
+CHROMA_MODE = os.getenv("CHROMA_MODE", "file").strip().lower()
+CHROMA_HOST = os.getenv("CHROMA_HOST", "chroma")
+CHROMA_PORT = int(os.getenv("CHROMA_PORT", "8000"))
+CHROMA_SSL = os.getenv("CHROMA_SSL", "").strip().lower() in ("1", "true", "yes", "on")
 COLLECTION_NAME = "knowledge_base"
 EMBEDDINGS_MODEL = "intfloat/multilingual-e5-large"
 # LLM endpoint — any OpenAI-compatible /v1/chat/completions server:

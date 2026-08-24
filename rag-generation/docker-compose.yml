@@ -24,3 +24,19 @@ services:
       # Docker Desktop's ~6.7GB WSL2 VM limit. Lower default keeps peak
       # memory bounded regardless of how many chunks land in one run.
       - RAG_EMBED_BATCH_SIZE=32
+      # ── Chroma ───────────────────────────────────────────────────
+      # По умолчанию file: пишем SQLite-индекс в ./output напрямую. Нельзя,
+      # пока индекс держит запущенный ассистент.
+      # server: писать в контейнер chroma по HTTP -- тогда ассистента
+      # останавливать не нужно:
+      #   $env:RAG_CHROMA_MODE = "server"; docker compose run --rm generator
+      #
+      # host.docker.internal, а не localhost: chroma живёт в ДРУГОМ
+      # compose-проекте (assistant-container) и виден только через порт,
+      # проброшенный на хост. Внутри контейнера "localhost" -- это он сам.
+      - RAG_CHROMA_MODE=${RAG_CHROMA_MODE:-file}
+      - RAG_CHROMA_HOST=${RAG_CHROMA_HOST:-host.docker.internal}
+      - RAG_CHROMA_PORT=${RAG_CHROMA_PORT:-8001}
+    extra_hosts:
+      # Linux-хостам host.docker.internal не резолвится сам по себе.
+      - "host.docker.internal:host-gateway"
