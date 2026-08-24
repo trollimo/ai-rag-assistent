@@ -1,0 +1,59 @@
+# ── LLM service: llama-server + GGUF model ──────────────────────
+# Split out of the assistant image so the LLM can be swapped for a corporate
+# OpenAI-compatible endpoint without rebuilding anything else. Serves
+# /v1/chat/completions on 9080 — the same API shape as the external option.
+#
+# LLAMA_SOURCE_IMAGE supplies /opt/llama (the full llama.cpp dist, binary +
+# backend .so plugins) — pulled from the already-built rag-assistant-offline
+# image (known-working b9804 build, avoids re-fetching from GitHub) rather
+# than a fresh archive. Point it at any image that has the same layout.
+#   docker build -f Dockerfile.llm \
+#     --build-arg LLAMA_SOURCE_IMAGE=rag-assistant-offline:latest \
+#     --build-context gguf-model=./offline-bundle/models -t rag-llm .
+#
+# No such image available? Run fetch-llama-dist.ps1 once (needs internet) to
+# populate offline-bundle/llama/llama-dist.tar.gz, then build the llama-source
+# stage from that instead:
+#   FROM python:3.11-slim AS llama-source
+#   COPY --from=llama-dist llama-dist.tar.gz /tmp/llama-dist.tar.gz
+#   RUN mkdir -p /opt/llama \
+#       && tar -xzf /tmp/llama-dist.tar.gz -C /opt/llama --strip-components=1 \
+#       && rm /tmp/llama-dist.tar.gz
+# ...with --build-context llama-dist=./offline-bundle/llama instead of the
+# --build-arg above. /opt/llama then already holds llama-server directly.
+
+ARG LLAMA_SOURCE_IMAGE=rag-assistant-offline:latest
+FROM ${LLAMA_SOURCE_IMAGE} AS llama-source
+
+# Reuses python:3.11-slim rather than pulling in a fresh debian:12-slim base —
+# one less base image to carry into the closed network (the rest of this repo
+# already depends on python:3.11-slim, so it's already vendored).
+FROM python:3.11-slim
+
+# libgomp1: OpenMP runtime required by llama-server
+RUN apt-get update && apt-get install -y --no-install-recommends libgomp1 \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY --from=llama-source /opt/llama /opt/llama
+ENV LD_LIBRARY_PATH=/opt/llama
+# Without an explicit WORKDIR (i.e. running from "/", the container default),
+# llama-server's backend discovery breaks and it exits with "no backends are
+# loaded" even though libggml-cpu-*.so sit right next to the binary. Any
+# non-root WORKDIR fixes it (confirmed with both /opt/llama and /app) — this
+# one is picked because it also lets the CMD below use a relative "./".
+WORKDIR /opt/llama
+
+COPY --from=gguf-model ./Qwen2.5-1.5B-Instruct-Q4_K_M.gguf /models/qwen2.5.gguf
+
+ENV LLM_MODEL_ALIAS=qwen2.5
+ENV LLM_CTX_SIZE=2048
+# Leave unset to let llama.cpp pick; set explicitly to match the host's cores
+ENV LLM_THREADS=""
+
+EXPOSE 9080
+
+# sh -c so the env vars expand at runtime rather than being baked in.
+CMD ["sh", "-c", "exec ./llama-server --host 0.0.0.0 --port 9080 \
+  -m /models/qwen2.5.gguf --alias \"$LLM_MODEL_ALIAS\" \
+  --ctx-size \"$LLM_CTX_SIZE\" \
+  ${LLM_THREADS:+--threads $LLM_THREADS}"]

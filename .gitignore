@@ -1,3 +1,18 @@
 .idea
 **/offline-bundle/
 
+# Secrets — never commit, regardless of which folder they live in
+.env
+.env.*
+!.env.example
+!.env.*.example
+
+*.tar.gz
+*.tar
+*.tag.gz
+*.gz
+*.zip
+
+__pycache__/
+*.pyc
+node_modules/

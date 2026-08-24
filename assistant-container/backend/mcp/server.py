@@ -66,6 +66,34 @@ def list_topics(filter: str = "", top_k: int | None = None):
         return {"error": str(e)}
 
 
+@mcp.tool(description=tool_config["tools"]["list_skills"]["description"].strip())
+def list_skills():
+    logger.info("MCP tool list_skills")
+    try:
+        resp = httpx.get(f"{RAG_API_URL}/skills", timeout=30)
+        resp.raise_for_status()
+        data = resp.json()
+        logger.debug("MCP tool list_skills result count=%d", len(data.get("skills", [])))
+        return data
+    except Exception as e:
+        logger.error("MCP tool list_skills error: %s", e)
+        return {"error": str(e)}
+
+
+@mcp.tool(description=tool_config["tools"]["get_skill"]["description"].strip())
+def get_skill(name: str):
+    logger.info("MCP tool get_skill name=%s", name)
+    try:
+        resp = httpx.get(f"{RAG_API_URL}/skills/{name}", timeout=30)
+        if resp.status_code == 404:
+            return {"error": f"Skill '{name}' not found. Use list_skills to see available skills."}
+        resp.raise_for_status()
+        return resp.json()
+    except Exception as e:
+        logger.error("MCP tool get_skill error: %s", e)
+        return {"error": str(e)}
+
+
 mcp.settings.message_path = '/sse/messages/'
 
 streamable_app = mcp.streamable_http_app()

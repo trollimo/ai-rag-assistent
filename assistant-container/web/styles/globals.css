@@ -5,4 +5,55 @@
 body {
   margin: 0;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  color: #111827;
+}
+.dark body {
+  color: #e5e7eb;
+}
+
+/* Fallback for markdown answers until @tailwindcss/typography is installed
+   (see tailwind.config.js) — remove once the `prose` classes take over. */
+.answer-markdown :where(h1, h2, h3) {
+  font-weight: 600;
+  margin: 1em 0 0.4em;
+}
+.answer-markdown p {
+  margin: 0.6em 0;
+  line-height: 1.6;
+}
+.answer-markdown ul,
+.answer-markdown ol {
+  margin: 0.6em 0;
+  padding-left: 1.4em;
+}
+.answer-markdown li {
+  margin: 0.25em 0;
+}
+.answer-markdown code {
+  background: #f1f5f9;
+  padding: 0.15em 0.4em;
+  border-radius: 0.3em;
+  font-size: 0.85em;
+}
+.dark .answer-markdown code {
+  background: #27272a;
+  color: #e5e7eb;
+}
+.answer-markdown pre {
+  background: #111827;
+  color: #f3f4f6;
+  padding: 0.9em 1em;
+  border-radius: 0.6em;
+  overflow-x: auto;
+  margin: 0.8em 0;
+}
+.answer-markdown pre code {
+  background: none;
+  padding: 0;
+  color: inherit;
+}
+.answer-markdown img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 0.5em;
 }

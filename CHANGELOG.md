@@ -1,5 +1,334 @@
 # Changelog
 
+## 1.14.0 (2026-08-22) — assistant-container
+
+### Added
+- Persistent feedback module — full design in `docs/feedback-architecture.md`.
+  **Off by default** (`feedback.enabled: false` in `mcp-tools.yaml`): no database is
+  touched, the reaction buttons and the "Запросы" tab are hidden, and the assistant
+  behaves exactly as it did before. A deployment without Postgres should look like the
+  feature was never built, not like it is broken.
+- `interactions` + `feedback` tables in Postgres (`feedback-db` service, behind the
+  `feedback` compose profile so a plain `docker compose up` never starts it). Deliberately
+  no `depends_on` from the assistant: the entrypoint runs everything under `wait -n`, so a
+  hard dependency would let a failed database take the whole container down.
+- `POST /feedback` wired to the three reaction buttons, which were UI-only stubs until now.
+  The server is the source of truth: `/chat` returns an `interaction_id` and stores what it
+  actually did, so a reaction is a tiny `{interaction_id, kind, comment}` rather than the
+  browser posting question/answer/sources back (forgeable, bulky, drifts from reality).
+- `feedback.log_questions` toggle. On, every interaction is logged — which is what makes
+  gap analysis possible at all, since a question the base could not answer and after which
+  the person silently left is invisible to any button. Off, an interaction is parked in a
+  bounded in-memory cache and only reaches disk if a human actually reacts to it.
+- Secret redaction (`core/redaction.py`) applied before anything is written. People paste
+  connection strings into questions; typed placeholders (`[PASSWORD]`, `[TOKEN]`) keep the
+  sentence readable while a secret that was never written to disk cannot leak from it.
+- Public showcase tab "Запросы": unanswered questions clustered into topics and voted on,
+  to rank what to add to the knowledge base first. Clustering reuses the query vector
+  already computed during `/chat` (no extra inference); the LLM only writes the topic
+  title, once per cluster, under instructions never to carry over concrete values. Raw user
+  text is never published — only that generated title, capped at 90 characters.
+  A topic goes public only after `publish_threshold` (default 2) distinct people hit it.
+- `/admin/*` behind a shared `ADMIN_TOKEN` header: feedback triage, topic
+  publish/hide/resolve, stats, manual clustering run. An unset token disables the admin API
+  outright rather than leaving it open.
+
+### Changed
+- `/chat` embeds the query once and reuses the vector for both retrieval passes. The
+  dominant-source path used to re-embed the same text a second time — ~1-2s of wasted CPU
+  per question on this hardware. The embedding call also moved off the event loop
+  (`asyncio.to_thread`), addressing CLAUDE.md backlog item #8.
+- No fourth "я не нашёл ответ" button: the server already knows that case from
+  `answer_source`, so the 👎 button re-words itself to "В базе этого нет" instead, and the
+  gap report builds itself without anyone pressing anything.
+
+### Fixed
+- Feedback database connection now retries in the background instead of giving up after
+  one attempt. The assistant deliberately has no `depends_on` for it, so `docker compose
+  --profile feedback up` regularly starts the assistant before Postgres accepts
+  connections — without the retry, a startup race silently decided whether the whole
+  module worked until someone restarted the container. Caught in testing, where exactly
+  that happened.
+- Schema bootstrap split `schema.sql` on `;` with a comment claiming that was "safe here
+  since the file is ours" — it was not. A prose SQL comment containing a semicolon
+  ("-- One vote per answer; …") got cut in half and its tail handed to the server as SQL.
+  Line comments are now stripped before splitting.
+- `prepare-offline-bundle.ps1` skipped downloading Python wheels whenever the cache
+  directory was non-empty, regardless of whether `requirements.txt` had changed. Adding a
+  dependency left it missing from the offline bundle, and the Docker build quietly reached
+  PyPI instead — which only works on a machine with internet, exactly what the bundle
+  exists to avoid needing. Now refreshes when `requirements.txt` is newer than the cache.
+- `prepare-offline-bundle.ps1` had never produced a usable offline wheel set at all.
+  `onnxruntime` (pulled in by fastembed) publishes no `manylinux2014` wheel, so asking pip
+  for that single platform tag failed the whole resolution; the fallback then re-ran
+  `pip download --no-deps` with no `--platform` at all and filled the bundle with **Windows**
+  wheels. Nobody noticed because the Docker build has internet and silently fetched the
+  real ones from PyPI — on a closed network it would simply not build. Now passes several
+  manylinux tags (6 wheels → 95, the actual dependency closure), purges non-Linux wheels
+  from the cache, and fails loudly instead of falling back to something broken.
+
+## 1.13.1 (2026-08-21) — assistant-container
+
+### Added
+- `SkillsPanel.tsx`: search box, substring match against title/name and
+  description. Name/title hits are ranked before description-only hits
+  (stable sort, so ties keep the backend's original order).
+
+## 1.13.0 (2026-08-21) — assistant-container
+
+### Added
+- Installable skills, end to end -- see `rag-generation/docs/skills-architecture.md`.
+  A skill is a folder with `SKILL.md` plus supporting files; the generator chunks its
+  `.md` files for RAG and zips the whole folder (minus `.git`/`.idea`/etc.) for installing
+  into a code agent. The assistant only mounts the generator's output read-only, it has
+  no source files of its own.
+- `GET /skills`, `GET /skills/{name}`, `GET /skills/{name}/archive`: catalog, metadata +
+  file list + install instructions, and the zip download. Names are validated against
+  `^[a-z0-9][a-z0-9._-]{0,63}$` and looked up in `index.json`, never path-joined from
+  user input.
+- MCP tools `list_skills` / `get_skill`: an agent gets a `download_url` + `sha256` +
+  install command rather than the archive bytes themselves (MCP tools return text; base64
+  would flood the agent's context with megabytes for a multi-file skill).
+- New `PUBLIC_BASE_URL` setting: `download_url` is only meaningful outside the container
+  (an MCP client runs on the developer's machine), so it can't be `localhost`.
+- `/chat` returns `skills: [{name, title, download_url}]`, derived structurally from
+  `is_skill`/`skill_name` metadata on the matched chunks -- no extra LLM call.
+- Web UI: the right panel is now two tabs, "Вопрос-ответ" and "Skills". The Skills tab
+  is a catalog with description/version/size and a download button; expanding a card
+  shows its file list and a copyable install snippet. Under an answer that touched a
+  skill, a "📦 title" chip switches to the Skills tab and opens that skill's card.
+
+### Fixed
+- `rag-generation`: default embedding batch size (256) tried to embed an entire
+  under-256-chunk to-embed set in one ONNX forward pass. Fine for the original small
+  corpus, but the 224-chunk skills batch (mostly java-performance-review, ~90 files)
+  OOM-killed the generator container (exit 137) inside Docker Desktop's ~6.7GB WSL2
+  limit, twice, silently -- no traceback, just a dead container after the last logged
+  line. Lowered the generator's default via `RAG_EMBED_BATCH_SIZE=32` in
+  `rag-generation/docker-compose.yml`, and confirmed the generator and assistant
+  containers must not run concurrently on this box regardless (documented in CLAUDE.md
+  backlog item #7) -- they compete for the same memory-capped VM.
+
+## 1.11.0 (2026-08-21) — rag-generation
+
+### Added
+- `skills.py` (new): skill detection (`find_skill_roots` -- immediate subfolders of a
+  `type: skills` source containing `SKILL.md`), tolerant metadata parsing (YAML
+  frontmatter when present, falling back to the first `#` heading / first real paragraph
+  / a plain `Version:` line -- `trollimo/java-performance-review-skill` has no frontmatter
+  at all), and `build_skill_archive` (zips the whole skill folder minus
+  `archive.exclude`, paths relative to the skill root so `SKILL.md` lands at the zip's own
+  root, content-hashed rather than zip-hashed since zip isn't timestamp-reproducible).
+- `rag-sources.yaml`: new `type: skills` source kind, with `archive.exclude` /
+  `archive.max_size_mb`. `ingest.py` chunks only each skill's `.md` files for RAG (tagged
+  `is_skill`/`skill_name`/`skill_root` in chunk metadata) and writes
+  `output/skills/index.json` + one zip per skill.
+- `docs/skills/`: three test skills of different shapes -- `java-performance-review`
+  (cloned from GitHub, no frontmatter, ~90 files across several subfolders, an HTML
+  template), `pr-checklist` (minimal, two files), `k8s-manifest-review` (frontmatter,
+  a shell script, a `references/` folder -- proves non-`.md` files land in the archive
+  but not in the vector index).
+
+## 1.12.0 (2026-08-21) — assistant-container
+
+### Added
+- `AnswerPanel.tsx`: reaction row on every answer -- 👍 "Ответ подошёл", 👎 "Не то" (expands
+  an inline "what's wrong?" textarea), 💡 "Знаю больше" (opens a contribute-hint popover).
+  UI-only stubs for now, nothing is persisted yet -- prep work for the reactions/stats layer
+  in the CLAUDE.md backlog, not that layer itself.
+- `main.py` / `mcp-tools.yaml`: new `GET /reactions/config` endpoint serving the 💡 popover
+  text from `reactions.contribute_hint` in the yaml config, editable without a rebuild via
+  the same bind-mount pattern as the rest of `mcp-tools.yaml`.
+- `AnswerPanel.tsx`: "📋 Скопировать" button at both the top and bottom of the answer card --
+  copies the answer text to the clipboard for pasting into OpenCode or another AI agent.
+  This one is fully functional, not a stub.
+
+## 1.11.0 (2026-08-21) — assistant-container
+
+### Added
+- `Mascot.tsx` (new): "Архивариус" mascot — an open-book character docked bottom-right,
+  draggable anywhere in the viewport (position persisted to `localStorage`), gently
+  floating/blinking when idle. Reflects request state: raised eyebrow + pulsing dots while
+  a question is loading, closed happy eyes + checkmark badge for a few seconds after an
+  answer lands. Wired into `Workspace.tsx` off the existing `anyLoading` turn state.
+- `prepare-offline-bundle.ps1`: fixed a real staleness bug -- the Next.js standalone build
+  step skipped itself whenever `offline-bundle/next-standalone` already had >1MB in it, with
+  no check for whether the source had actually changed. This silently served a stale UI
+  bundle through several Docker rebuilds earlier in the project's history. Now always
+  rebuilds (`npm install` + `npm run build`) since it's a fast local build, not an expensive
+  network fetch like the other cached steps in this script.
+
+## 1.10.1 (2026-08-21) — assistant-container
+
+### Fixed
+- `main.py`: the off-base-knowledge marker used to detect `answer_source: llm_knowledge`
+  in combined mode was only checked as a prefix (`.startswith`). The LLM sometimes prepends
+  a meta-commentary sentence about following instructions before the marker instead of
+  starting with it, so the check silently missed it -- badge stayed "📚 rag" and the stray
+  reasoning sentence leaked into the visible answer. Now searches the whole answer for the
+  marker and strips everything up to and including it, regardless of position.
+- `prompts.py`: `SYSTEM_PROMPT_COMBINED` now explicitly forbids narrating that it's
+  following the marker instruction -- the model was doing this openly instead of just
+  emitting the marker silently.
+
+## 1.10.0 (2026-08-21) — assistant-container
+
+### Added
+- Rebrand: "RAG Ассистент" → "Архивариус" (`ChatSidebar.tsx`, `layout.tsx` title); subtitle
+  "Стандарты разработки" → "Стандарты и инструкции".
+- `ChatSidebar.tsx`: (?) icon next to the header opens a short popover explaining strict
+  vs combined mode and the 🧠 badge.
+- `Workspace.tsx`: sidebar is now 20% wider by default (384px vs the old fixed 320px) and
+  user-resizable via a drag handle on its right edge, clamped to 260-640px and persisted
+  to `localStorage`.
+
+### Fixed
+- `prompts.py` / `main.py`: combined mode only fell back to the LLM's general knowledge
+  when retrieval returned zero matches. Real-but-irrelevant chunks (e.g. "что такое кубер"
+  pulling Deployment/Service docs) still triggered the strict prompt, silently ignoring
+  the combined-mode toggle. Unified into one combined system prompt that uses context when
+  it actually answers the question and falls back to general knowledge (fact-only, marked)
+  otherwise; `answer_source` is now derived from a structural marker in the reply instead
+  of guessed from whether any chunks were retrieved.
+
+## 1.9.0 (2026-08-21) — assistant-container
+
+### Added
+- `main.py` / `ChatSidebar.tsx`: strict/combined answer mode toggle. Strict (default,
+  unchanged behavior) answers only from retrieved context, honest "no information" if
+  empty. Combined falls back to the LLM's own general knowledge when retrieval finds
+  nothing, with a mandatory anti-hallucination system prompt and a required
+  "(ответ не из базы знаний)" disclaimer prefix.
+- `main.py`: `answer_source` field ("rag" / "llm_knowledge" / "no_info") on every
+  `/chat` response, driven structurally by whether retrieval matched anything rather
+  than parsing the LLM's own self-description -- `AnswerPanel.tsx` shows it as a badge.
+- `main.py`: query-normalization LLM call before retrieval -- expands slang/abbreviations
+  ("кубер" -> "Kubernetes") into a cleaner search query before embedding. Motivated by a
+  direct comparison: OpenCode's MCP tool-calling already does this implicitly (the agent
+  picks its own search terms), and its answers were noticeably better than `/chat`
+  embedding the user's raw informal phrasing. `/search` (what MCP's `search_docs` calls)
+  is untouched -- an agent already choosing its own query text makes this redundant
+  there. Master switch `search.normalize_query` in `mcp-tools.yaml` (default on), plus a
+  per-request `normalize_query` override the master switch always wins over.
+- `SettingsMenu.tsx` (replaces `ThemeToggle.tsx`): gear-icon popover with the
+  normalize-query toggle (for quick A/B testing) and the theme switch together.
+- Dark/light theme toggle across all components, `tailwind.config.js` `darkMode: "class"`,
+  inline script in `layout.tsx` `<head>` to set the class before hydration (no flash).
+  Light mode contrast raised too (page background darkened relative to card/sidebar
+  backgrounds -- they read as near-identical grays before).
+
+### Fixed
+- `main.py`: sources deduplicated per source file instead of once per matched chunk
+  (multiple chunks from the same doc rendered as repeated entries). Chips are now
+  clickable and expand the full matched chunk text inline, not just the file name.
+- `mcp-tools.yaml` / `settings.py`: removed `chat.show_sources` / the inline
+  "**Источники:** ..." text appended to the answer -- it duplicated the sources chip UI
+  that already renders separately (visibly, as two different-looking source lists).
+
+## 1.8.2 (2026-08-21) — assistant-container
+
+### Fixed
+- `retriever.py`: `max_distance` now only filters ranks 1+ (chromadb result index),
+  rank 0 (the closest match) is always kept. A bare keyword query with no
+  surrounding sentence ("Deployment") embeds measurably farther from its own
+  correct document than the same word inside a real question does (324 vs 246
+  on this corpus) -- past a fixed cutoff either way, but it's still the best
+  available answer and was wrongly dropped, returning "no information". Every
+  case where an irrelevant chunk actually leaked into an answer was rank 2+,
+  never rank 0, so this keeps that fix while not discarding a genuinely
+  correct top hit just because the query was terse.
+
+## 1.8.1 (2026-08-21) — assistant-container
+
+### Fixed
+- `retriever.py`: single-topic follow-up search used `where["source"] = {"$contains": path_filter}`
+  — `$contains` filters document text (`where_document`), not metadata (`where`); on metadata it
+  silently matched nothing. Every question where `_detect_source()` found a dominant topic (e.g.
+  "Расскажи про deployment", the related-topics buttons) got zero results regardless of relevance.
+  `path_filter` is always an exact source path already, so exact match (`where["source"] = path_filter`)
+  is both the fix and the semantically correct behavior — never needed substring matching.
+
+## 1.8.0 (2026-08-21) — assistant-container
+
+### Added
+- `retriever.py` / `mcp-tools.yaml`: `search.max_distance` cutoff — chromadb results past this l2
+  distance are dropped instead of always returning `top_k` regardless of relevance. Found via a
+  real case: a question about code review pulled in an unrelated Kubernetes Service troubleshooting
+  chunk because on this small, topically mixed corpus the model doesn't separate "relevant" from
+  "irrelevant" by a wide margin (irrelevant chunks landed within ~1 distance unit of relevant ones).
+  Threshold (300) is corpus/model-specific — see `rag-generation/docs/embedding-model-research.md`.
+
+## 1.7.3 (2026-08-20) — assistant-container
+
+### Fixed
+- `offline-bundle/next-standalone`: the bundle refresh after the 1.7.0 UI rewrite silently kept
+  serving the old single-column chat UI. Cause: `rm -rf next-standalone/*` and `cp -r .../standalone/*
+  ...` — bash glob `*` does not match dotfiles, so the hidden `.next/` directory (where Next.js
+  standalone actually puts the compiled server-side pages) was never cleared or replaced. Same class
+  of bug is possible in `prepare-offline-bundle.ps1` if it's ever run with a stale bundle already
+  present — PowerShell's `Copy-Item -Path "x\*"` does not have this specific glob gap, but the
+  script's own "skip if `$nextSize -gt 1MB`" staleness check means it never rebuilds automatically
+  once *any* content exists there, stale or not.
+
+## 1.7.1 (2026-08-20) — assistant-container
+
+### Fixed
+- `requirements.txt`: pin `mcp<2.0.0`. `offline-bundle/wheels` doesn't cover every transitive
+  dependency, so this build's `pip install` partly reached PyPI and landed on `mcp` 2.0.0, which
+  renamed `mcp.server.fastmcp` -> `mcp.server.mcpserver`. `backend/mcp/server.py` targets the 1.x
+  API, so the MCP process crashed on import; `entrypoint.sh`'s `wait -n` then took the whole
+  container down with it, producing a `restart: unless-stopped` crash-loop.
+
+### Changed
+- `prompts.py`: system prompt now explicitly requires answering in Russian regardless of question language.
+
+## 1.7.0 (2026-08-20) — assistant-container
+
+### Added
+- `Dockerfile.llm` / `docker-compose.yml`: llama-server + GGUF split out of the assistant image into
+  its own `llm` service — swappable for a corporate OpenAI-compatible endpoint without touching the
+  rest of the stack. Along the way: found and fixed a real llama.cpp bug where
+  `ggml_backend_load_all()` fails with "no backends are loaded" if the process's cwd is `/`,
+  regardless of how the binary itself is invoked — fixed with an explicit non-root `WORKDIR`.
+- `settings.py`: `LLM_BASE_URL` / `LLM_API_KEY` / `LLM_MODEL_NAME` — generalized OpenAI-compatible
+  connector, local `llm` service or external endpoint are interchangeable. `LLAMA_HOST`/`LLAMA_MODEL`
+  kept as deprecated aliases.
+- `web/components/Workspace.tsx` + `ChatSidebar.tsx` + `AnswerPanel.tsx`: two-column UI (chat history
+  left, presentation panel right: question -> answer -> sources -> related topics), replacing the
+  single-column chat-bubble layout. `/chat` now returns `related_topics`.
+- `Dockerfile.offline`: no longer fetches `node:20-slim` or llama.cpp from GitHub at build time —
+  both come from an already-built donor image, with `fetch-llama-dist.ps1` as a from-scratch fallback.
+
+### Known gaps
+- `offline-bundle/wheels` is incomplete (see 1.7.1) — build isn't fully offline yet.
+- `@tailwindcss/typography` is listed in `package.json` but not installed (registry was unreachable
+  mid-session) — `answer-markdown` CSS in `globals.css` is the fallback until it's installed.
+
+## 1.10.0 (2026-08-21) — rag-generation
+
+### Added
+- `ingest.py` / `chunking.py`: incremental indexing — chunk hashes recorded in `manifest.json`, only
+  changed/new chunks are re-embedded, removed ones are deleted from the collection. A build
+  fingerprint (model/chunk_size/overlap/prefixes) forces a full reindex when any of them change, so
+  stored vectors never get silently compared across incompatible settings. On the ~15-minute,
+  630-chunk slow-indexing case from `CLAUDE.md`: a single-file edit now re-embeds in ~2s.
+- `embedding_fn.py`: optional `RAG_EMBED_E5_PREFIXES` (`query:`/`passage:`) — off by default, measured
+  slightly worse on the corpus size tested (hit@1 18/20 -> 17/20 over 20 Russian queries).
+- `docs/kubernetes/*`, `docs/security/*`: real reference docs (Kubernetes Deployment/Service/Ingress/
+  Helm/ConfigMap/StatefulSet/HPA; OWASP Top 10, injection/XSS, access control, dependency scanning,
+  Docker image hardening, prompt injection) — indexed into the real knowledge base, not a synthetic
+  test fixture.
+- `docs/embedding-model-research.md`: why `multilingual-e5-large` fp32 stays the embedding model —
+  a lighter model (MiniLM) and int8 quantization of the same model were both tested and rejected
+  (int8's expected 2.7-3.4x speedup needs AVX512-VNNI the test CPU doesn't have; got +15% with a
+  real quality regression instead).
+
+### Fixed
+- Root cause of the slow-indexing bug in `CLAUDE.md`: not Ollama (unused), not missing batching
+  (already batched), not missing threads (ONNXRuntime already saturates all cores) — 99% of the time
+  is the `multilingual-e5-large` inference itself, the heaviest model in fastembed's catalog, on a
+  CPU without AVX512-VNNI. Chroma write time is <1% of total.
+
 ## 1.6.1 (2026-07-01) — assistant-container
 
 ### Added

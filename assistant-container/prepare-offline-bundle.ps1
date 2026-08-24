@@ -72,18 +72,53 @@ FROM /root/.ollama/models/Qwen2.5-1.5B-Instruct-Q4_K_M.gguf
 Write-Host "      done" -ForegroundColor Green
 
 # ── 4/6: Python wheels ─────────────────────────────────────────
-$wheelCount = (Get-ChildItem $WheelsDir -Filter "*.whl" -ErrorAction SilentlyContinue).Count
-if ($wheelCount -gt 0) {
+$req = Join-Path $ScriptDir "backend/requirements.txt"
+$wheels = Get-ChildItem $WheelsDir -Filter "*.whl" -ErrorAction SilentlyContinue
+$wheelCount = $wheels.Count
+# Re-download when requirements.txt is newer than the cache. A plain "skip if
+# not empty" check silently kept an outdated wheel set: adding a dependency
+# left it missing offline, and the Docker build quietly reached PyPI instead
+# (which only works on a machine with internet -- exactly what this bundle
+# exists to avoid needing).
+$reqNewer = $false
+if ($wheelCount -gt 0 -and (Test-Path $req)) {
+    $newestWheel = ($wheels | Sort-Object LastWriteTime -Descending | Select-Object -First 1).LastWriteTime
+    $reqNewer = (Get-Item $req).LastWriteTime -gt $newestWheel
+}
+# A non-Linux wheel in the cache is proof the cache itself is invalid, whatever
+# the timestamps say -- the image is Linux, so these can never be installed.
+# Checked outside the skip branch on purpose: the timestamp heuristic only
+# catches "requirements changed", never "what we downloaded was wrong".
+$badWheels = $wheels | Where-Object { $_.Name -match "-(win_amd64|win32|macosx[^-]*)\.whl$" }
+if ($badWheels) {
+    Write-Host "[4/6] Cache has $($badWheels.Count) non-Linux wheel(s) -- rebuilding it" -ForegroundColor Yellow
+}
+if ($wheelCount -gt 0 -and -not $reqNewer -and -not $badWheels) {
     Write-Host "[4/6] Python wheels already cached ($wheelCount wheels), skipping" -ForegroundColor Yellow
 } else {
+    if ($reqNewer) {
+        Write-Host "[4/6] requirements.txt newer than wheel cache -- refreshing" -ForegroundColor Yellow
+    }
     Write-Host "[4/6] Downloading Python wheels (linux x86_64)..." -ForegroundColor Green
-    $req = Join-Path $ScriptDir "backend/requirements.txt"
+    # Several manylinux tags on purpose. onnxruntime (via fastembed) ships no
+    # manylinux2014 wheel, so asking for that tag alone makes the whole
+    # resolution fail -- and the old fallback (`pip download --no-deps`, with
+    # no --platform at all) then quietly filled the bundle with *Windows*
+    # wheels, which are useless in the Linux image. That went unnoticed because
+    # the Docker build has internet and silently pulled the real ones from
+    # PyPI; on a closed network it would simply not build.
+    if ($badWheels) {
+        Write-Host "      Removing $($badWheels.Count) non-Linux wheel(s) from cache" -ForegroundColor Yellow
+        $badWheels | Remove-Item -Force
+    }
     pip download --only-binary :all: `
-        --platform manylinux2014_x86_64 --python-version 3.11 `
+        --platform manylinux2014_x86_64 `
+        --platform manylinux_2_17_x86_64 `
+        --platform manylinux_2_28_x86_64 `
+        --python-version 3.11 `
         --dest $WheelsDir -r $req 2>&1 | Out-Null
     if ($LASTEXITCODE -ne 0) {
-        Write-Host "      Some packages have no manylinux wheel, trying with source..." -ForegroundColor Yellow
-        pip download --no-deps --dest $WheelsDir -r $req 2>&1 | Out-Null
+        throw "pip download failed -- the offline bundle would be incomplete. Run the command manually to see the resolver error."
     }
     $wheelCount = (Get-ChildItem $WheelsDir -Filter "*.whl").Count
     Write-Host "      $wheelCount wheels" -ForegroundColor Green
@@ -117,30 +152,32 @@ if ($feCacheSize -gt 1MB) {
 }
 
 # ── 7/7: Next.js build ─────────────────────────────────────────
-$nextFiles = Get-ChildItem $NextStandalone -Recurse -File -ErrorAction SilentlyContinue
-$nextSize = ($nextFiles | Measure-Object -Property Length -Sum).Sum
-if ($nextSize -gt 1MB) {
-    Write-Host "[6/6] Next.js standalone already built ($([math]::Round($nextSize / 1MB, 1)) MB), skipping" -ForegroundColor Yellow
-} else {
-    Write-Host "[6/6] Building Next.js (npm install + npm run build)..." -ForegroundColor Green
-    Push-Location (Join-Path $ScriptDir "web")
-    npm install --no-audit --no-fund 2>&1 | Out-Null
-    if ($LASTEXITCODE -ne 0) { throw "npm install failed" }
-    npm run build 2>&1 | Out-Null
-    if ($LASTEXITCODE -ne 0) { throw "npm run build failed" }
+# Always rebuilt (unlike the download steps above) -- it's a local build of
+# fast-changing source, not an expensive network fetch, so there is no safe
+# way to tell "already built" apart from "built from stale source" without
+# hashing the web/ tree. A stale skip here silently served old UI code
+# through multiple Docker rebuilds before this was caught.
+Write-Host "[6/6] Building Next.js (npm install + npm run build)..." -ForegroundColor Green
+Push-Location (Join-Path $ScriptDir "web")
+npm install --no-audit --no-fund 2>&1 | Out-Null
+if ($LASTEXITCODE -ne 0) { throw "npm install failed" }
+npm run build 2>&1 | Out-Null
+if ($LASTEXITCODE -ne 0) { throw "npm run build failed" }
 
-    if (Test-Path ".next/standalone") {
-        Copy-Item -Path ".next/standalone/*" -Destination $NextStandalone -Recurse -Force
-    }
-    if (Test-Path "public") {
-        Copy-Item -Path "public/*" -Destination $NextPublic -Recurse -Force
-    }
-    if (Test-Path ".next/static") {
-        Copy-Item -Path ".next/static/*" -Destination $NextStatic -Recurse -Force
-    }
-    Pop-Location
-    Write-Host "      Next.js standalone saved" -ForegroundColor Green
+Remove-Item (Join-Path $NextStandalone "*") -Recurse -Force -ErrorAction SilentlyContinue
+Remove-Item (Join-Path $NextPublic "*") -Recurse -Force -ErrorAction SilentlyContinue
+Remove-Item (Join-Path $NextStatic "*") -Recurse -Force -ErrorAction SilentlyContinue
+if (Test-Path ".next/standalone") {
+    Copy-Item -Path ".next/standalone/*" -Destination $NextStandalone -Recurse -Force
 }
+if (Test-Path "public") {
+    Copy-Item -Path "public/*" -Destination $NextPublic -Recurse -Force
+}
+if (Test-Path ".next/static") {
+    Copy-Item -Path ".next/static/*" -Destination $NextStatic -Recurse -Force
+}
+Pop-Location
+Write-Host "      Next.js standalone saved" -ForegroundColor Green
 
 # ── Summary ────────────────────────────────────────────────────
 Write-Host ""

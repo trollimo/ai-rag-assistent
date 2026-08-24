@@ -45,10 +45,18 @@ def _merge_small_chunks(chunks: list, min_chars: int = 800) -> list:
     return merged
 
 
-def generate_manifest(chunks: list, sources: list, chunk_size: int = 0, overlap: int = 0) -> dict:
-    return {
+def generate_manifest(chunks: list, sources: list, chunk_size: int = 0, overlap: int = 0,
+                      hashes: dict | None = None, fingerprint: dict | None = None) -> dict:
+    manifest = {
         "total_chunks": len(chunks),
         "sources": list(set(sources)),
         "chunk_size": chunk_size,
         "overlap": overlap,
     }
+    if hashes is not None:
+        # chunk id -> content hash, so the next run can re-embed only what moved
+        manifest["hashes"] = hashes
+    if fingerprint is not None:
+        # settings that invalidate every stored vector when they change
+        manifest["fingerprint"] = fingerprint
+    return manifest

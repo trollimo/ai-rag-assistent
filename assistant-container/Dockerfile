@@ -42,8 +42,15 @@ COPY backend/requirements.txt /app/backend/requirements.txt
 RUN --mount=type=cache,target=/root/.cache/pip \
     pip install -r /app/backend/requirements.txt
 
-# Pre-cache fastembed model (~535 MB ONNX, multilingual-e5-large)
+# Pre-cache fastembed model (multilingual-e5-large: 545 KB graph + 2.24 GB fp32 weights)
 ENV FASTEMBED_CACHE_PATH=/root/.cache/fastembed
+
+# ── e5 query:/passage: prefixes ──────────────────────────────────
+# Must match the value used by rag-generation when the database was built:
+# documents indexed with "passage: " are only searchable by queries embedded
+# with "query: ". A mismatch silently degrades results - nothing errors out.
+# Off by default (measured slightly worse on the small starting corpus).
+# ENV RAG_EMBED_E5_PREFIXES=1
 RUN python -c "from fastembed import TextEmbedding; TextEmbedding(model_name='intfloat/multilingual-e5-large', cache_dir='/root/.cache/fastembed').embed(['test'])"
 
 # Backend source

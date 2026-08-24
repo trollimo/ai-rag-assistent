@@ -10,10 +10,10 @@ logger = logging.getLogger("backend.rag")
 class Retriever:
     def __init__(self):
         self.client = chromadb.PersistentClient(path=str(settings.RAG_DB_PATH))
-        embedding_func = MultilingualEmbeddingFunction(model_name=settings.EMBEDDINGS_MODEL)
+        self.embedding_func = MultilingualEmbeddingFunction(model_name=settings.EMBEDDINGS_MODEL)
         self.collection = self.client.get_or_create_collection(
             name=settings.COLLECTION_NAME,
-            embedding_function=embedding_func,
+            embedding_function=self.embedding_func,
         )
         count = self.collection.count()
         if count:
@@ -25,31 +25,78 @@ class Retriever:
             logger.info("Retriever ready db=%s collection=%s — empty",
                          settings.RAG_DB_PATH, settings.COLLECTION_NAME)
 
-    def search(self, query: str, top_k: int = 5, source_filter: str | None = None, path_filter: str | None = None):
+    def embed_query(self, query: str):
+        """Embed a search query once so callers can reuse the vector.
+
+        Worth exposing: /chat runs retrieval twice on the common path (a
+        second pass filtered to the dominant source), and each pass used to
+        re-embed the same text -- ~1-2s of CPU per call on this hardware.
+        The feedback module needs the same vector again to cluster
+        unanswered questions, which would have been a third.
+        """
+        return self.embedding_func.embed_query(query)
+
+    def search(self, query: str, top_k: int = 5, source_filter: str | None = None,
+               path_filter: str | None = None, query_vector=None):
         logger.debug("RAG search query=%s top_k=%d source_filter=%s path_filter=%s", query, top_k, source_filter, path_filter)
         where = {}
         if source_filter:
             where["source_name"] = source_filter
         if path_filter:
-            where["source"] = {"$contains": path_filter}
+            # Exact match: path_filter is always a full source path handed
+            # back by _detect_source(), never a partial string. "$contains"
+            # here was wrong -- chromadb's $contains applies to document
+            # text (where_document), not metadata (where), so it silently
+            # matched nothing and every dominant-source follow-up query
+            # returned zero results regardless of max_distance.
+            where["source"] = path_filter
         if not where:
             where_clause = None
         else:
             where_clause = {"$and": [{k: v} for k, v in where.items()]} if len(where) > 1 else where
-        result = self.collection.query(query_texts=[query], n_results=top_k, where=where_clause)
+        # Embed the query ourselves so the e5 "query:" prefix is applied —
+        # query_texts would route through __call__, which prefixes documents.
+        query_vec = query_vector if query_vector is not None else self.embedding_func.embed_query(query)
+        result = self.collection.query(
+            query_embeddings=[query_vec], n_results=top_k, where=where_clause
+        )
         matches = []
-        for doc, meta, dist in zip(
+        dropped = []
+        candidates = list(zip(
             result["documents"][0],
             result["metadatas"][0],
             result["distances"][0],
-        ):
-            matches.append({
+        ))
+        for rank, (doc, meta, dist) in enumerate(candidates):
+            # Rank 0 (the single closest match) is always kept, cutoff only
+            # applies from rank 1 on. A bare keyword like "Deployment" (no
+            # surrounding sentence) embeds measurably farther from its own
+            # correct doc than the same word inside a real question does --
+            # e.g. 324 vs 246 on this corpus, both past a naive fixed
+            # threshold. Every case where an irrelevant chunk actually
+            # leaked into an answer (the Kubernetes Service chunk on an
+            # unrelated code-review question) was rank 2+, never rank 0 --
+            # so dropping only the tail keeps that fix while not returning
+            # "no information" when the top hit is genuinely correct.
+            if rank > 0 and settings.MAX_DISTANCE is not None and dist > settings.MAX_DISTANCE:
+                dropped.append((meta["source"], dist))
+                continue
+            match = {
                 "text": doc,
                 "source": meta["source"],
                 "chunk": meta["chunk"],
                 "distance": dist,
-            })
+            }
+            if meta.get("is_skill"):
+                # Lets /chat surface "this answer touches an installable
+                # skill" without re-parsing chunk text -- see ingest.py's
+                # skills handling and skills_registry.py.
+                match["skill_name"] = meta.get("skill_name")
+            matches.append(match)
 
+        if dropped:
+            logger.debug("RAG search dropped %d results past max_distance=%s: %s",
+                         len(dropped), settings.MAX_DISTANCE, dropped)
         logger.debug("RAG search result count=%d sources=%s",
                      len(matches), [m["source"] for m in matches])
         return matches

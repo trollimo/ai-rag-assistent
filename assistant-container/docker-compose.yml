@@ -1,13 +1,38 @@
 services:
+  # Local LLM. Skip it entirely when pointing at a corporate endpoint:
+  #   docker compose up assistant       (starts only the assistant)
+  # and set LLM_BASE_URL / LLM_API_KEY / LLM_MODEL_NAME on the assistant.
+  llm:
+    image: rag-llm:1.7.0
+    build:
+      context: .
+      dockerfile: Dockerfile.llm
+      # Pulls the llama-server binary out of an already-built assistant image
+      # (no GitHub fetch). Build that image first, or override with a tag you
+      # have locally. Fallback if you don't: run fetch-llama-dist.ps1 once and
+      # switch Dockerfile.llm's FROM to the archive-based COPY (see its header).
+      args:
+        - LLAMA_SOURCE_IMAGE=rag-assistant-offline:latest
+      additional_contexts:
+        - gguf-model=./offline-bundle/models
+    container_name: rag-llm
+    ports:
+      - "9080:9080"   # OpenAI-compatible /v1/chat/completions
+    environment:
+      - LLM_MODEL_ALIAS=qwen2.5
+      - LLM_CTX_SIZE=2048
+      # Match the host's physical cores; unset lets llama.cpp decide
+      # - LLM_THREADS=6
+    restart: unless-stopped
+
   assistant:
-    image: rag-offline
+    image: rag-offline:1.14.0
     build:
       context: .
       dockerfile: Dockerfile.offline
       additional_contexts:
         - wheels=./offline-bundle/wheels
         - fastembed-cache=./offline-bundle/fastembed-cache
-        - gguf-model=./offline-bundle/models
         - next-standalone=./offline-bundle/next-standalone
         - next-public=./offline-bundle/next-public
         - next-static=./offline-bundle/next-static
@@ -16,18 +41,72 @@ services:
       - "3000:3000"   # Next.js Web UI
       - "8000:8000"   # FastAPI REST API (chat, search, topics)
       - "9081:9081"   # MCP server (Streamable HTTP /mcp + SSE /sse)
-      - "9080:9080"   # llama-server LLM inference
     volumes:
       - ../rag-generation/output/chroma_db:/data/chroma_db
-      # - ./backend:/app/backend
+      - ../rag-generation/output/skills:/data/skills:ro
+      - ./backend:/app/backend
       - ./entrypoint.sh:/app/entrypoint.sh
-      # - ./backend/config/mcp-tools.yaml:/app/backend/config/mcp-tools.yaml  # раскомментировать для правки описания инструментов без пересборки
+      # - ./backend/config/mcp-tools.yaml:/app/backend/config/mcp-tools.yaml  # раскомментировать для правки конфига (в т.ч. feedback.enabled) без пересборки
     environment:
       - RAG_DB_PATH=/data/chroma_db
-      - LLAMA_HOST=http://localhost:9080
-      - LLAMA_MODEL=qwen2.5
+      - RAG_SKILLS_PATH=/data/skills
+      # Адрес, по которому ассистент виден снаружи -- подставляется в
+      # download_url для get_skill/list_skills (агент качает архив с машины
+      # разработчика, не изнутри контейнера). Поменять на реальный адрес,
+      # если ассистент не на localhost разработчика.
+      - PUBLIC_BASE_URL=http://localhost:8000
+      # ── LLM connector ────────────────────────────────────────────
+      # Local llm service by default. For a corporate model, point
+      # LLM_BASE_URL at it and supply the key — the API shape is the same.
+      #- LLM_BASE_URL=http://llm:9080
+      #- LLM_MODEL_NAME=qwen2.5
+      - LLM_BASE_URL=https://api.neuraldeep.ru/
+      - LLM_API_KEY=${LLM_API_KEY}
+      - LLM_MODEL_NAME=${LLM_MODEL_NAME}
+      # ── Embedding prefixes ───────────────────────────────────────
+      # Must match what rag-generation used when building the database.
+      # - RAG_EMBED_E5_PREFIXES=1
       - LOG_LEVEL=DEBUG
       - MCP_SERVER_URL=http://localhost:9081/mcp
       # - MCP_SERVER_URL=http://mcp-service.rag-namespace.svc.cluster.local:9081/mcp  # для Kubernetes
       - NEXT_PUBLIC_FASTAPI_URL=http://localhost:8000
+      # ── Обратная связь ───────────────────────────────────────────
+      # Включается в backend/config/mcp-tools.yaml (feedback.enabled).
+      # Postgres поднимается только с профилем: docker compose --profile feedback up -d
+      - FEEDBACK_DB_URL=postgresql+psycopg://rag:rag@feedback-db:5432/rag_feedback
+      # Пустой токен = админ-API выключен целиком (а не открыт всем).
+      - ADMIN_TOKEN=${ADMIN_TOKEN:-}
+    depends_on:
+      - llm
     restart: unless-stopped
+
+  # Хранилище обратной связи. Под профилем: обычный `docker compose up` его НЕ
+  # поднимает, ассистент работает без БД (feedback.enabled: false).
+  # Включить:  docker compose --profile feedback up -d
+  #
+  # Намеренно без depends_on со стороны ассистента: тот обязан переживать
+  # отсутствие БД в любом случае (иначе упавший Postgres утащил бы за собой
+  # весь контейнер через `wait -n` в entrypoint.sh).
+  feedback-db:
+    image: postgres:16-alpine
+    profiles: ["feedback"]
+    container_name: rag-feedback-db
+    environment:
+      - POSTGRES_USER=rag
+      - POSTGRES_PASSWORD=rag
+      - POSTGRES_DB=rag_feedback
+    ports:
+      - "5432:5432"
+    volumes:
+      # Единственные невосстановимые данные в системе: chroma_db и архивы
+      # скиллов пересобираются из исходников, обратная связь -- нет.
+      - feedback-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U rag -d rag_feedback"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+volumes:
+  feedback-db-data:

@@ -71,10 +71,49 @@ storage:
   collection: knowledge_base
 
 embeddings:
-  model: all-MiniLM-L6-v2
+  model: intfloat/multilingual-e5-large
 ```
 
 При использовании `-Source c:\docs` папки монтируются в `/external/src0`, `/external/src1` и т.д. — пути в yaml должны указывать на эти точки монтирования.
+
+Для больших разовых партий чанков (например, добавили сразу несколько объёмных скиллов) переменная `RAG_EMBED_BATCH_SIZE` (по умолчанию 32 в `docker-compose.yml`) ограничивает размер одного ONNX-батча — без этого лимита эмбеддинг всей партии за один проход на CPU может съесть больше памяти, чем выделено Docker Desktop / WSL2, и контейнер молча падает с `exit 137` (OOM). Проверено на практике: 224 чанка одним батчем валили генератор на VM с лимитом ~6.7 ГБ.
+
+## Скиллы (installable skills)
+
+Источник с `type: skills` — это не просто документация для RAG, а **устанавливаемые
+пакеты**: папка со своим `SKILL.md`, которую можно и обсудить словами, и скачать
+целиком архивом для установки в code-агент (OpenCode и т.п.). Полная архитектура
+и мотивация — в [`docs/skills-architecture.md`](docs/skills-architecture.md).
+
+### Как добавить новый скилл
+
+1. Создай папку `docs/skills/<name>/` с файлом `SKILL.md` внутри (плюс любые
+   вспомогательные файлы — другие `.md`, `scripts/`, `references/`, шаблоны).
+   `SKILL.md` не обязан следовать конвенции Claude Code (YAML-frontmatter) —
+   если её нет, метаданные разбираются по первому `# Заголовку`, первому
+   абзацу и строке `Version: ...`.
+2. Запусти генератор (`.\rag-build.ps1` или `docker compose run generator`).
+3. Готово: `.md`-файлы скилла попали в ChromaDB (для вопросов через RAG), а
+   вся папка целиком — в `output/skills/<name>.zip` (для установки).
+
+Детекция — **только непосредственные подпапки** `docs/skills/` (без рекурсии
+по вложенности); файлы **внутри** найденного скилла архивируются рекурсивно
+любой глубины, кроме путей под `archive.exclude` в `rag-sources.yaml`.
+
+```yaml
+  - name: skills
+    path: ./docs/skills
+    type: skills
+    include: ["**/*.md"]      # что режется в чанки
+    archive:
+      exclude: ["**/.git/**", "**/.idea/**", "**/node_modules/**"]
+      max_size_mb: 25
+```
+
+Результат генерации — `output/skills/index.json` (каталог) плюс по одному
+zip на скилл; ассистент монтирует эту папку read-only и раздаёт через
+`GET /skills`, MCP `list_skills`/`get_skill` и вкладку Skills в Web UI —
+подробности в [`assistant-container/README.md`](../assistant-container/README.md#скиллы).
 
 ## Как готовить документы
 
